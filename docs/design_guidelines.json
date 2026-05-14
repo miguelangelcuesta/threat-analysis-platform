@@ -1,0 +1,123 @@
+{
+  "theme": "LIGHT",
+  "archetype": "Swiss & High-Contrast (Accessible Trust Variant)",
+  "design_principles": [
+    "Simplicity and readability above all: No jargon, large text, high contrast.",
+    "Error prevention: Clear confirmations, large clickable areas.",
+    "One task at a time: Uncluttered layout, linear flows.",
+    "Unambiguous feedback: Risk levels must be instantly recognizable.",
+    "Never imply certainty: Present results as guidance, not guarantees."
+  ],
+  "typography": {
+    "heading_font": "Work Sans",
+    "body_font": "IBM Plex Sans",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 dark:text-slate-50",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-50",
+      "h3": "text-xl sm:text-2xl font-medium text-slate-800 dark:text-slate-100",
+      "body": "text-lg sm:text-xl leading-relaxed text-slate-700 dark:text-slate-300",
+      "small": "text-base text-slate-600 dark:text-slate-400"
+    }
+  },
+  "color_palette": {
+    "light": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "text_primary": "#0F172A",
+      "text_secondary": "#334155",
+      "border": "#CBD5E1",
+      "primary": "#2563EB",
+      "primary_hover": "#1D4ED8",
+      "status_low_risk": "#059669",
+      "status_medium_risk": "#D97706",
+      "status_high_risk": "#DC2626",
+      "status_inconclusive": "#64748B"
+    },
+    "dark": {
+      "background": "#0F172A",
+      "surface": "#1E293B",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#CBD5E1",
+      "border": "#334155",
+      "primary": "#3B82F6",
+      "primary_hover": "#60A5FA",
+      "status_low_risk": "#10B981",
+      "status_medium_risk": "#F59E0B",
+      "status_high_risk": "#EF4444",
+      "status_inconclusive": "#94A3B8"
+    }
+  },
+  "spacing_and_layout": {
+    "container": "max-w-3xl mx-auto px-6 sm:px-8",
+    "section_padding": "py-12 sm:py-16",
+    "card_padding": "p-8 sm:p-10",
+    "gap_large": "gap-8 sm:gap-12",
+    "gap_small": "gap-4 sm:gap-6",
+    "border_radius": "rounded-2xl sm:rounded-3xl"
+  },
+  "components": {
+    "buttons": {
+      "primary": "w-full h-16 sm:h-20 text-xl font-semibold rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg transition-all active:scale-[0.98]",
+      "secondary": "w-full h-16 sm:h-20 text-xl font-medium rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white border-2 border-transparent transition-all",
+      "explain_easy": "inline-flex items-center justify-center gap-3 px-8 py-4 text-lg font-medium rounded-full bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-200 transition-colors"
+    },
+    "inputs": {
+      "textarea": "w-full min-h-[160px] p-6 text-xl rounded-2xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all resize-none",
+      "text": "w-full h-16 px-6 text-xl rounded-2xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all",
+      "label": "block mb-3 text-xl font-medium text-slate-900 dark:text-slate-100"
+    },
+    "cards": {
+      "base": "bg-white dark:bg-slate-800 rounded-3xl p-8 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] border border-slate-100 dark:border-slate-700"
+    },
+    "traffic_light": {
+      "container": "flex flex-col sm:flex-row items-center justify-center gap-6 p-8 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700",
+      "circle": "w-24 h-24 sm:w-32 sm:h-32 rounded-full flex items-center justify-center shadow-inner transition-all duration-300",
+      "active_low_risk": "bg-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.35)] scale-105 border-4 border-white dark:border-slate-800",
+      "active_medium_risk": "bg-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.35)] scale-105 border-4 border-white dark:border-slate-800",
+      "active_high_risk": "bg-red-500 shadow-[0_0_30px_rgba(239,68,68,0.35)] scale-105 border-4 border-white dark:border-slate-800",
+      "active_inconclusive": "bg-slate-500 shadow-[0_0_30px_rgba(100,116,139,0.35)] scale-105 border-4 border-white dark:border-slate-800",
+      "inactive": "bg-slate-200 dark:bg-slate-700 opacity-40 scale-90"
+    }
+  },
+  "icons_and_assets": {
+    "icon_library": "@phosphor-icons/react (Duotone weight for soft, approachable feel)",
+    "images": [
+      {
+        "category": "hero_illustration",
+        "url": "https://static.prod-images.emergentagent.com/jobs/9bbd7b32-0194-49a7-a697-2743ada95203/images/307f4bce56fb2b7c1fdaabbea5e0edc3eb1cf414daf20430f89e528b5384be24.png",
+        "description": "Minimalist digital security shield with a checkmark"
+      },
+      {
+        "category": "feature_scan_icon",
+        "url": "https://static.prod-images.emergentagent.com/jobs/9bbd7b32-0194-49a7-a697-2743ada95203/images/f336f80db695d045950eadf2e2aab245e347a8a8126abebf53ba9d658a63b92f.png",
+        "description": "3D clay style magnifying glass scanning a text bubble"
+      }
+    ]
+  },
+  "motion_and_interactions": {
+    "hover": "Subtle scaling (scale-105) for small buttons, background color darkening for large buttons.",
+    "focus": "High contrast ring focus (ring-4) on all inputs and buttons.",
+    "page_transitions": "Fade and slight slide up (using framer-motion) to avoid jarring changes.",
+    "traffic_light_animation": "Smooth fade/scale reveal of final result only. Avoid blinking."
+  },
+  "ux_rules": {
+    "history_storage": "Use localStorage for anonymous local history.",
+    "disclaimer": "Esta herramienta ofrece una evaluación orientativa y no garantiza la legitimidad del mensaje.",
+    "result_labels": [
+      "Riesgo bajo",
+      "Riesgo moderado",
+      "Riesgo alto",
+      "No concluyente"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Prioritize accessibility: Do not use font sizes smaller than text-base (16px).",
+    "Implement the Traffic Light component visually with four possible states including inconclusive.",
+    "Use Phosphor icons (duotone).",
+    "Ensure the 'Explícamelo fácil' button is prominent and uses amber/yellow accent.",
+    "Keep the interface as a single-page experience with minimal navigation.",
+    "Support robust Dark/Light theme toggle with high contrast.",
+    "Use simple Spanish text for all user-facing labels.",
+    "Add 'data-testid' to all interactive elements."
+  ]
+}
