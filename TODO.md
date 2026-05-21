@@ -1,10 +1,15 @@
-# TODO: Cambios aplicados
+# TODO anti-scam-detector (correcciones)
 
-- [x] Eliminar TODO.md (contenido anterior) y dejar uno nuevo actualizado.
-- [ ] Corregir backend/analysis_engine.py para cumplir producción:
-  - [ ] Carga perezosa del modelo (obligatorio) y garantizar que el modelo se cargue una sola vez.
-  - [ ] Manejo robusto de errores (try/except) al codificar/analizar.
-  - [ ] Mejoras solicitadas en scoring/lógica (según el plan).
-- [ ] Ejecutar pruebas locales (función analyze_text y/o API).
-- [ ] Verificar que frontend/server consumen el nuevo esquema sin romperse.
+## Backend
+- [x] Corregir import frágil en `backend/server.py` (import relativo desde paquete).
+- [x] Corregir lógica `domain_risk()` en `backend/analysis_engine.py` para evaluar “dominio legítimo” de forma consistente.
+- [x] Hacer `whois_risk()` robusto al tipo de `creation_date` (normalizar a `datetime`).
+
+
+## Frontend
+- [x] Unificar llamadas a la API: hacer que `DashboardPage.js` use `frontend/src/api/client.js`.
+- [x] Confirmar que `REACT_APP_BACKEND_URL` está usado correctamente (y evitar hardcodeo).
+
+## Verificación
+- [ ] Ejecutar compile/check y (si aplica) levantar backend/frontend para validar flujo completo.
 

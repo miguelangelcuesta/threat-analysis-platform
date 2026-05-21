@@ -1,5 +1,6 @@
 import re
-from datetime import datetime
+from datetime import datetime, date
+
 from urllib.parse import urlparse
 from sentence_transformers import SentenceTransformer, util
 
@@ -91,6 +92,14 @@ def extract_domain(url):
 # DOMAIN RISK (MEJORADO)
 # =========================
 
+def is_legit_domain(domain):
+    for legit_domains in KNOWN_BRANDS.values():
+        for legit in legit_domains:
+            if domain.endswith(legit):
+                return True
+    return False
+
+
 def domain_risk(domain):
     score = 0
     signals = []
@@ -107,7 +116,7 @@ def domain_risk(domain):
     suspicious_words = ["login", "secure", "verify", "account"]
 
     if any(word in domain for word in suspicious_words):
-        if not any(domain.endswith(d) for domains in KNOWN_BRANDS.values() for d in domains):
+        if not is_legit_domain(domain):
             score += 25
             signals.append("phishing_keywords")
 
@@ -117,6 +126,7 @@ def domain_risk(domain):
         signals.append("long_domain")
 
     return score, signals
+
 
 
 # =========================
@@ -136,6 +146,10 @@ def whois_risk(domain):
             creation = creation[0]
 
         if creation:
+            # Normaliza creation_date si viene como date en lugar de datetime
+            if isinstance(creation, date) and not isinstance(creation, datetime):
+                creation = datetime.combine(creation, datetime.min.time())
+
             age_days = (datetime.now() - creation).days
 
             if age_days < 30:
@@ -144,6 +158,7 @@ def whois_risk(domain):
             elif age_days < 180:
                 score += 10
                 signals.append("recent_domain")
+
 
     except:
         # ✔ NO penalizar fallo técnico

@@ -1,8 +1,6 @@
 import { useState } from "react";
-import axios from "axios";
 import TrafficLight from "../components/TrafficLight";
-
-const API = "http://localhost:8000/api";
+import client from "../api/client";
 
 export default function DashboardPage() {
 
@@ -30,8 +28,7 @@ export default function DashboardPage() {
     setResult(null);
 
     try {
-
-      const res = await axios.post(`${API}/analyze`, {
+      const res = await client.post(`/analyze`, {
         text: inputType === "text" ? textInput : null,
         url: inputType === "url" ? urlInput : null,
         input_type: inputType,
@@ -40,12 +37,10 @@ export default function DashboardPage() {
       setResult(res.data);
 
     } catch (e) {
-
       setError(
         e.response?.data?.detail ||
         "Error durante el análisis"
       );
-
     }
 
     setLoading(false);
@@ -93,7 +88,6 @@ export default function DashboardPage() {
   `;
 
   return (
-
     <div style={styles.page}>
 
       {/* LEFT PANEL */}
@@ -101,13 +95,12 @@ export default function DashboardPage() {
 
         <h2>🛡️ Plataforma de Análisis de Amenazas</h2>
 
-<p style={styles.sideText}>
- Detección inteligente de amenazas,
-  fraude digital y análisis de reputación.
-</p>
+        <p style={styles.sideText}>
+          Detección inteligente de amenazas,
+          fraude digital y análisis de reputación.
+        </p>
 
         <div style={styles.toggle}>
-
           <button
             style={styles.toggleButton}
             onClick={() => setInputType("text")}
@@ -121,31 +114,25 @@ export default function DashboardPage() {
           >
             URL
           </button>
-
         </div>
 
         {inputType === "text" ? (
-
           <textarea
             style={styles.input}
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder="Introduce el mensaje sospechoso..."
           />
-
         ) : (
-
           <input
             style={styles.input}
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             placeholder="https://ejemplo.com"
           />
-
         )}
 
         <div style={styles.actions}>
-
           <button
             style={styles.primaryButton}
             onClick={analyze}
@@ -160,7 +147,6 @@ export default function DashboardPage() {
           >
             Limpiar
           </button>
-
         </div>
 
         {error && (
@@ -175,64 +161,46 @@ export default function DashboardPage() {
       <div style={styles.center}>
 
         <h2 style={{ marginBottom: 20 }}>
-          🧠 Informe de seguridad
+          🛡️ Informe de seguridad
         </h2>
 
         {/* LOADING */}
         {loading && (
-
           <div style={styles.loadingBox}>
-
             <div style={styles.spinner}></div>
 
             <div>
-
               <h3 style={{ margin: 0 }}>
                 Analizando amenaza...
               </h3>
-
               <p style={{ opacity: 0.7 }}>
                 Procesando señales semánticas y reputación del dominio
               </p>
-
             </div>
-
           </div>
         )}
 
         {/* EMPTY */}
         {!result && !loading && (
-
           <div style={styles.emptyState}>
-
-            <h3>
-              Sistema preparado para análisis
-            </h3>
-
+            <h3>Sistema preparado para análisis</h3>
             <p style={{ opacity: 0.7 }}>
-              Introduce un mensaje o URL para iniciar
-              la evaluación de riesgo.
+              Introduce un mensaje o URL para iniciar la evaluación de riesgo.
             </p>
-
           </div>
-
         )}
 
         {/* RESULT */}
         {result && (
-
           <div
             style={{
               ...styles.card,
               background: theme.bg
             }}
           >
-
             {/* MAIN STATUS */}
             <div style={{ marginBottom: 22 }}>
-
               <div style={styles.stateRow}>
-
                 <TrafficLight riskLevel={risk} />
 
                 <h2
@@ -243,7 +211,6 @@ export default function DashboardPage() {
                 >
                   {theme.title}
                 </h2>
-
               </div>
 
               <p
@@ -254,7 +221,6 @@ export default function DashboardPage() {
               >
                 {theme.subtitle}
               </p>
-
             </div>
 
             {/* ACTION */}
@@ -275,35 +241,24 @@ export default function DashboardPage() {
             <h3>🧠 Señales detectadas</h3>
 
             {result.signals?.length ? (
-
               <ul style={styles.signalList}>
-
                 {result.signals.map((s, i) => (
                   <li key={i}>
                     {translateSignal(s)}
                   </li>
                 ))}
-
               </ul>
-
             ) : (
-
               <p>
                 Sin señales relevantes detectadas
               </p>
-
             )}
 
             {/* ANALYSIS */}
-            <h3>📊 Análisis</h3>
-
+            <h3>📌 Análisis</h3>
             <p style={{ lineHeight: 1.7 }}>
-
-              Evaluación basada en comportamiento
-              del contenido, estructura de enlaces
-              y reputación del dominio para detectar
-              posibles patrones de fraude.
-
+              Evaluación basada en comportamiento del contenido, estructura de enlaces
+              y reputación del dominio para detectar posibles patrones de fraude.
             </p>
 
             {/* TECHNICAL */}
@@ -313,27 +268,20 @@ export default function DashboardPage() {
                 opacity: 0.85
               }}
             >
-
               <summary style={{ cursor: "pointer" }}>
                 Detalles técnicos
               </summary>
 
               <p style={{ marginTop: 10 }}>
-
-                Motor de scoring híbrido basado
-                en NLP, heurísticas de dominio
+                Motor de scoring híbrido basado en NLP, heurísticas de dominio
                 y clasificación de riesgo.
-
               </p>
-
             </details>
-
           </div>
         )}
 
+        <style>{spinnerKeyframes}</style>
       </div>
-
-      <style>{spinnerKeyframes}</style>
 
     </div>
   );
@@ -342,7 +290,6 @@ export default function DashboardPage() {
 /* ================= HELPERS ================= */
 
 function translateSignal(signal) {
-
   const map = {
     "brand_impersonation": "Intento de suplantación de marca",
     "phishing_keywords": "Uso de lenguaje típico de phishing",
@@ -359,7 +306,6 @@ function translateSignal(signal) {
 /* ================= STYLES ================= */
 
 const styles = {
-
   page: {
     display: "flex",
     minHeight: "100vh",
@@ -484,5 +430,5 @@ const styles = {
     color: "#ff6b6b",
     marginTop: 15
   }
-
 };
+
