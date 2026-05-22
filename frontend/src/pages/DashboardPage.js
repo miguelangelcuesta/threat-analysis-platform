@@ -4,21 +4,14 @@ import client from "../api/client";
 
 export default function DashboardPage() {
 
-  const [inputType, setInputType] = useState("text");
   const [textInput, setTextInput] = useState("");
-  const [urlInput, setUrlInput] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
   const analyze = async () => {
 
-    const content = inputType === "text"
-      ? textInput
-      : urlInput;
-
-    if (!content.trim()) {
+    if (!textInput.trim()) {
       setError("Introduce contenido para analizar");
       return;
     }
@@ -28,19 +21,15 @@ export default function DashboardPage() {
     setResult(null);
 
     try {
-      const res = await client.post(`/analyze`, {
-        text: inputType === "text" ? textInput : null,
-        url: inputType === "url" ? urlInput : null,
-        input_type: inputType,
+      const res = await client.post("/analyze", {
+        text: textInput,
+        input_type: "text"
       });
 
       setResult(res.data);
 
     } catch (e) {
-      setError(
-        e.response?.data?.detail ||
-        "Error durante el análisis"
-      );
+      setError(e.response?.data?.detail || "Error en el análisis");
     }
 
     setLoading(false);
@@ -48,44 +37,22 @@ export default function DashboardPage() {
 
   const clear = () => {
     setTextInput("");
-    setUrlInput("");
     setResult(null);
     setError("");
   };
 
-  const risk = result?.risk_level;
+  const risk = result?.verdict?.level || "safe";
+  const score = result?.verdict?.score || 0;
 
-  const ui = {
-    safe: {
-      color: "#22c55e",
-      bg: "#052e16",
-      title: "Análisis seguro",
-      subtitle: "No se han detectado indicios relevantes de fraude"
-    },
-
-    suspicious: {
-      color: "#facc15",
-      bg: "#3b2f0b",
-      title: "Actividad sospechosa detectada",
-      subtitle: "Clasificación de riesgo basada en señales detectadas"
-    },
-
-    danger: {
-      color: "#ef4444",
-      bg: "#3f0a0a",
-      title: "Amenaza detectada",
-      subtitle: "Se han identificado patrones de fraude o suplantación"
-    }
+  const UI = {
+    safe: { color: "#22c55e", bg: "#071a12", label: "SEGURO" },
+    low: { color: "#38bdf8", bg: "#0a1f2a", label: "BAJO RIESGO" },
+    medium: { color: "#facc15", bg: "#2a240a", label: "RIESGO MEDIO" },
+    high: { color: "#fb923c", bg: "#2a1408", label: "RIESGO ALTO" },
+    critical: { color: "#ef4444", bg: "#2a0707", label: "CRÍTICO" }
   };
 
-  const theme = ui[risk] || ui.safe;
-
-  const spinnerKeyframes = `
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  `;
+  const theme = UI[risk] || UI.safe;
 
   return (
     <div style={styles.page}>
@@ -93,342 +60,273 @@ export default function DashboardPage() {
       {/* LEFT PANEL */}
       <div style={styles.left}>
 
-        <h2>🛡️ Plataforma de Análisis de Amenazas</h2>
+        <h2 style={styles.title}>SOC Threat Analyzer</h2>
 
-        <p style={styles.sideText}>
-          Detección inteligente de amenazas,
-          fraude digital y análisis de reputación.
+        <p style={styles.subtitle}>
+          Sistema de análisis de amenazas y phishing en tiempo real
         </p>
 
-        <div style={styles.toggle}>
-          <button
-            style={styles.toggleButton}
-            onClick={() => setInputType("text")}
-          >
-            Texto
-          </button>
-
-          <button
-            style={styles.toggleButton}
-            onClick={() => setInputType("url")}
-          >
-            URL
-          </button>
-        </div>
-
-        {inputType === "text" ? (
-          <textarea
-            style={styles.input}
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Introduce el mensaje sospechoso..."
-          />
-        ) : (
-          <input
-            style={styles.input}
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="https://ejemplo.com"
-          />
-        )}
+        <textarea
+          style={styles.input}
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          placeholder="Introduce el mensaje o email sospechoso..."
+        />
 
         <div style={styles.actions}>
-          <button
-            style={styles.primaryButton}
-            onClick={analyze}
-            disabled={loading}
-          >
-            {loading ? "Analizando..." : "Analizar"}
+          <button style={styles.primaryButton} onClick={analyze}>
+            Analizar
           </button>
 
-          <button
-            style={styles.secondaryButton}
-            onClick={clear}
-          >
+          <button style={styles.secondaryButton} onClick={clear}>
             Limpiar
           </button>
         </div>
 
-        {error && (
-          <p style={styles.error}>
-            {error}
-          </p>
-        )}
-
+        {error && <p style={styles.error}>{error}</p>}
       </div>
 
-      {/* CENTER PANEL */}
+      {/* MAIN PANEL */}
       <div style={styles.center}>
 
-        <h2 style={{ marginBottom: 20 }}>
-          🛡️ Informe de seguridad
-        </h2>
-
-        {/* LOADING */}
-        {loading && (
-          <div style={styles.loadingBox}>
-            <div style={styles.spinner}></div>
-
-            <div>
-              <h3 style={{ margin: 0 }}>
-                Analizando amenaza...
-              </h3>
-              <p style={{ opacity: 0.7 }}>
-                Procesando señales semánticas y reputación del dominio
-              </p>
-            </div>
+        {!result && !loading && (
+          <div style={styles.empty}>
+            Sistema listo para análisis
           </div>
         )}
 
-        {/* EMPTY */}
-        {!result && !loading && (
-          <div style={styles.emptyState}>
-            <h3>Sistema preparado para análisis</h3>
-            <p style={{ opacity: 0.7 }}>
-              Introduce un mensaje o URL para iniciar la evaluación de riesgo.
-            </p>
+        {loading && (
+          <div style={styles.loadingBox}>
+            <div style={styles.spinner}></div>
+            <div>
+              Analizando amenaza en tiempo real...
+            </div>
           </div>
         )}
 
         {/* RESULT */}
         {result && (
-          <div
-            style={{
-              ...styles.card,
-              background: theme.bg
-            }}
-          >
-            {/* MAIN STATUS */}
-            <div style={{ marginBottom: 22 }}>
-              <div style={styles.stateRow}>
-                <TrafficLight riskLevel={risk} />
+          <div style={{ ...styles.card, background: theme.bg }}>
 
-                <h2
-                  style={{
-                    color: theme.color,
-                    margin: 0
-                  }}
-                >
-                  {theme.title}
-                </h2>
+            {/* HEADER DECISION */}
+            <div style={styles.header}>
+              <TrafficLight riskBin={risk} />
+
+              <div>
+                <div style={{ color: theme.color, fontSize: 22 }}>
+                  {theme.label}
+                </div>
+
+                <div style={styles.score}>
+                  Puntuación: {score}/100
+                </div>
+              </div>
+            </div>
+
+            {/* SUMMARY */}
+            <div style={styles.section}>
+              <h3>Resumen ejecutivo</h3>
+              <p>{result.executive_summary}</p>
+            </div>
+
+            {/* TEXT ANALYSIS */}
+            <div style={styles.grid}>
+
+              <div style={styles.panel}>
+                <h4>ANÁLISIS DEL TEXTO</h4>
+                <p><b>Intención:</b> {result.analysis?.text?.intention || "-"}</p>
+                <p><b>Técnicas:</b></p>
+                <ul>
+                  {(result.analysis?.text?.tecnicas || []).map((t, i) => (
+                    <li key={i}>{t}</li>
+                  ))}
+                </ul>
               </div>
 
-              <p
-                style={{
-                  opacity: 0.85,
-                  marginTop: 8
-                }}
-              >
-                {theme.subtitle}
-              </p>
+              {/* URL ANALYSIS */}
+              <div style={styles.panel}>
+                <h4>ANÁLISIS DE URL</h4>
+                <p><b>Dominio:</b> {result.analysis?.url?.dominio || "-"}</p>
+                <p>{result.analysis?.url?.problema}</p>
+              </div>
+            </div>
+
+            {/* ATTACK CHAIN */}
+            <div style={styles.section}>
+              <h3>Cadena de ataque</h3>
+
+              <ul>
+                {(result.cadena_ataque || []).map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* EVIDENCE */}
+            <div style={styles.section}>
+              <h3>Evidencias</h3>
+
+              <ul>
+                {(result.evidencias || []).map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
             </div>
 
             {/* ACTION */}
-            <div
-              style={{
-                background: theme.color,
-                color: "#000",
-                padding: 14,
-                borderRadius: 10,
-                fontWeight: "bold",
-                marginBottom: 22
-              }}
-            >
-              🎯 {result.action}
+            <div style={styles.actionBox}>
+              Acción recomendada: {result.verdict?.action}
             </div>
 
-            {/* SIGNALS */}
-            <h3>🧠 Señales detectadas</h3>
-
-            {result.signals?.length ? (
-              <ul style={styles.signalList}>
-                {result.signals.map((s, i) => (
-                  <li key={i}>
-                    {translateSignal(s)}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                Sin señales relevantes detectadas
-              </p>
-            )}
-
-            {/* ANALYSIS */}
-            <h3>📌 Análisis</h3>
-            <p style={{ lineHeight: 1.7 }}>
-              Evaluación basada en comportamiento del contenido, estructura de enlaces
-              y reputación del dominio para detectar posibles patrones de fraude.
-            </p>
-
-            {/* TECHNICAL */}
-            <details
-              style={{
-                marginTop: 18,
-                opacity: 0.85
-              }}
-            >
-              <summary style={{ cursor: "pointer" }}>
-                Detalles técnicos
-              </summary>
-
-              <p style={{ marginTop: 10 }}>
-                Motor de scoring híbrido basado en NLP, heurísticas de dominio
-                y clasificación de riesgo.
-              </p>
-            </details>
           </div>
         )}
 
-        <style>{spinnerKeyframes}</style>
       </div>
-
     </div>
   );
-}
-
-/* ================= HELPERS ================= */
-
-function translateSignal(signal) {
-  const map = {
-    "brand_impersonation": "Intento de suplantación de marca",
-    "phishing_keywords": "Uso de lenguaje típico de phishing",
-    "very_new_domain": "Dominio recién creado",
-    "recent_domain": "Dominio reciente",
-    "long_domain": "Dominio inusualmente largo",
-    "credentials": "Posible intento de robo de credenciales",
-    "urgency": "Uso de lenguaje manipulativo o urgente"
-  };
-
-  return map[signal] || signal;
 }
 
 /* ================= STYLES ================= */
 
 const styles = {
+
   page: {
     display: "flex",
-    minHeight: "100vh",
+    height: "100vh",
     background: "#0a0f1c",
-    color: "white",
+    color: "#ffffff",
     fontFamily: "Arial"
   },
 
   left: {
-    width: "30%",
-    minWidth: 320,
-    padding: 24,
+    width: 340,
+    padding: 20,
     borderRight: "1px solid #1f2937",
     background: "#0b1220"
   },
 
   center: {
     flex: 1,
-    padding: 30,
+    padding: 24,
     overflowY: "auto"
   },
 
-  sideText: {
+  title: {
+    fontSize: 18,
+    marginBottom: 10
+  },
+
+  subtitle: {
+    fontSize: 13,
     opacity: 0.7,
-    lineHeight: 1.6,
     marginBottom: 20
-  },
-
-  toggle: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 15
-  },
-
-  toggleButton: {
-    flex: 1,
-    padding: 10,
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer"
   },
 
   input: {
     width: "100%",
-    minHeight: 130,
-    padding: 14,
-    borderRadius: 10,
-    border: "1px solid #1f2937",
+    height: 180,
     background: "#111827",
     color: "white",
-    resize: "none",
-    outline: "none",
-    marginBottom: 15
+    border: "1px solid #374151",
+    borderRadius: 8,
+    padding: 10
   },
 
   actions: {
     display: "flex",
-    gap: 10
+    gap: 10,
+    marginTop: 10
   },
 
   primaryButton: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    border: "none",
+    padding: 10,
     background: "#2563eb",
-    color: "white",
-    cursor: "pointer",
-    fontWeight: "bold"
-  },
-
-  secondaryButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    border: "1px solid #374151",
-    background: "transparent",
+    border: "none",
     color: "white",
     cursor: "pointer"
   },
 
-  card: {
-    padding: 24,
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.06)"
+  secondaryButton: {
+    flex: 1,
+    padding: 10,
+    background: "transparent",
+    border: "1px solid #374151",
+    color: "white",
+    cursor: "pointer"
   },
 
-  stateRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14
+  error: {
+    marginTop: 10,
+    color: "#ef4444"
+  },
+
+  center: {
+    flex: 1
+  },
+
+  empty: {
+    opacity: 0.6,
+    marginTop: 40
   },
 
   loadingBox: {
+    padding: 20,
     display: "flex",
-    alignItems: "center",
-    gap: 20,
-    background: "#111827",
-    padding: 24,
-    borderRadius: 14
+    gap: 15,
+    alignItems: "center"
   },
 
   spinner: {
-    width: 45,
-    height: 45,
-    border: "4px solid #1f2937",
-    borderTop: "4px solid #3b82f6",
+    width: 35,
+    height: 35,
+    border: "3px solid #1f2937",
+    borderTop: "3px solid #3b82f6",
     borderRadius: "50%",
     animation: "spin 1s linear infinite"
   },
 
-  emptyState: {
-    opacity: 0.75,
-    marginTop: 40
+  card: {
+    padding: 20,
+    borderRadius: 12
   },
 
-  signalList: {
-    lineHeight: 2
+  header: {
+    display: "flex",
+    gap: 15,
+    alignItems: "center",
+    marginBottom: 20
   },
 
-  error: {
-    color: "#ff6b6b",
-    marginTop: 15
+  score: {
+    fontSize: 13,
+    opacity: 0.8
+  },
+
+  section: {
+    marginTop: 20
+  },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+    marginTop: 20
+  },
+
+  panel: {
+    background: "#0f172a",
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid #1f2937"
+  },
+
+  actionBox: {
+    marginTop: 20,
+    padding: 12,
+    background: "#111827",
+    borderRadius: 8,
+    border: "1px solid #374151",
+    fontWeight: "bold"
   }
 };
-

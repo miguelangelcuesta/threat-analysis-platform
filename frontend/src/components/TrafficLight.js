@@ -1,20 +1,28 @@
-export default function TrafficLight({ riskLevel }) {
+export default function TrafficLight({ riskBin }) {
+
+  const normalized = String(riskBin || "safe")
+    .trim()
+    .toLowerCase();
+
   const config = {
-    safe: { color: "#38a169" },
-    suspicious: { color: "#facc15" },
-    danger: { color: "#e53e3e" }
+    safe: "#22c55e",
+    low: "#38bdf8",
+    medium: "#facc15",
+    high: "#fb923c",
+    critical: "#ef4444"
   };
 
-  const current = config[riskLevel] || config.safe;
+  const color = config[normalized] || "#22c55e";
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center" }}>
       <div
         style={{
-          width: 14,
-          height: 14,
+          width: 12,
+          height: 12,
           borderRadius: "50%",
-          background: current.color,
+          background: color,
+          boxShadow: `0 0 10px ${color}`,
           animation: "pulse 1.2s infinite"
         }}
       />
@@ -22,7 +30,7 @@ export default function TrafficLight({ riskLevel }) {
       <style>{`
         @keyframes pulse {
           0% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.3); opacity: 0.6; }
+          50% { transform: scale(1.4); opacity: 0.6; }
           100% { transform: scale(1); opacity: 1; }
         }
       `}</style>
