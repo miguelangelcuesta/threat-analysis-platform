@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from datetime import datetime
 
-from soc.database import Base
+from backend.soc.database import Base
 
 
 class Incident(Base):
