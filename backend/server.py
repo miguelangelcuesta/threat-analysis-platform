@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 from backend.analysis_engine import analyze_text
-from soc.database import engine
-from soc.database import Base
+from backend.soc.database import engine, Base
 # =====================
 # APP
 # =====================
