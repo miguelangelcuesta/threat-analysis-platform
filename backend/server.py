@@ -5,7 +5,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
 
-from analysis_engine import analyze_text
+from backend.analysis_engine import analyze_text
 from soc.database import engine
 from soc.database import Base
 # =====================
