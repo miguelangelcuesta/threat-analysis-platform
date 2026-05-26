@@ -3,7 +3,7 @@ from datetime import datetime, date
 from urllib.parse import urlparse
 
 from sentence_transformers import SentenceTransformer, util
-from soc.soc_rules import evaluate_rules
+from backend.soc.soc_rules import evaluate_rules
 
 
 # =========================
