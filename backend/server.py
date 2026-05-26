@@ -6,14 +6,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 from analysis_engine import analyze_text
-
-# =====================
-# ENV
-# =====================
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
-
+from soc.database import engine
+from soc.database import Base
 # =====================
 # APP
 # =====================
@@ -26,12 +20,27 @@ app = FastAPI(
 api = APIRouter(prefix="/api")
 
 # =====================
+# STARTUP (CORRECTO)
+# =====================
+
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
+
+# =====================
+# ENV
+# =====================
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
+
+# =====================
 # CORS
 # =====================
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # para frontend público
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,7 +66,6 @@ async def analyze(
 ):
 
     try:
-
         content = data.text or data.url or ""
 
         if not content.strip():
@@ -84,16 +92,12 @@ async def analyze(
         )
 
 # =====================
-# HISTORY (mock)
+# ENDPOINTS AUX
 # =====================
 
 @api.get("/history")
 async def history():
     return []
-
-# =====================
-# STATS (mock)
-# =====================
 
 @api.get("/stats")
 async def stats():
@@ -103,25 +107,13 @@ async def stats():
         "status": "active"
     }
 
-# =====================
-# HEALTH
-# =====================
-
 @api.get("/health")
 async def health():
-    return {
-        "status": "ok"
-    }
-
-# =====================
-# ROOT
-# =====================
+    return {"status": "ok"}
 
 @api.get("/")
 async def root():
-    return {
-        "message": "Anti-Scam Detector API running"
-    }
+    return {"message": "Anti-Scam Detector API running"}
 
 # =====================
 # ROUTER

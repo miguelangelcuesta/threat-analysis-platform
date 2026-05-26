@@ -3,7 +3,6 @@ from datetime import datetime, date
 from urllib.parse import urlparse
 
 from sentence_transformers import SentenceTransformer, util
-
 from soc.soc_rules import evaluate_rules
 
 
@@ -26,10 +25,8 @@ MAX_ML_SCORE = 120
 
 def get_model():
     global _model
-
     if _model is None:
         _model = SentenceTransformer("all-MiniLM-L6-v2")
-
     return _model
 
 
@@ -104,23 +101,18 @@ def clamp(x):
 
 
 # =========================
-# RISK BIN
+# RISK LEVEL
 # =========================
 
 def get_risk_bin(score):
-
     if score >= 80:
         return "critical"
-
     elif score >= 60:
         return "high"
-
     elif score >= 35:
         return "medium"
-
     elif score >= 15:
         return "low"
-
     return "safe"
 
 
@@ -129,14 +121,13 @@ def get_risk_bin(score):
 # =========================
 
 def domain_risk(domain):
-
     score = 0
     signals = []
 
     if not domain:
         return 0, []
 
-    legit_domains = [
+    legit = [
         "paypal.com",
         "google.com",
         "amazon.com",
@@ -145,23 +136,12 @@ def domain_risk(domain):
         "microsoft.com"
     ]
 
-    if any(
-        brand in domain
-        for brand in ["paypal", "google", "amazon", "apple", "microsoft"]
-    ):
-
-        legit = any(domain.endswith(d) for d in legit_domains)
-
-        if not legit:
+    if any(b in domain for b in ["paypal", "google", "amazon", "apple", "microsoft"]):
+        if not any(domain.endswith(d) for d in legit):
             score += 40
             signals.append("brand_impersonation")
 
-    if any(k in domain for k in [
-        "login",
-        "secure",
-        "verify",
-        "account"
-    ]):
+    if any(k in domain for k in ["login", "secure", "verify", "account"]):
         score += 15
         signals.append("phishing_keywords")
 
@@ -177,34 +157,26 @@ def domain_risk(domain):
 # =========================
 
 def whois_risk(domain):
-
     score = 0
     signals = []
 
     try:
         import whois
-
         w = whois.whois(domain)
-
         creation = w.creation_date
 
         if isinstance(creation, list):
             creation = creation[0]
 
         if creation:
-
             if isinstance(creation, date):
-                creation = datetime.combine(
-                    creation,
-                    datetime.min.time()
-                )
+                creation = datetime.combine(creation, datetime.min.time())
 
             age_days = (datetime.now() - creation).days
 
             if age_days < 30:
                 score += 30
                 signals.append("very_new_domain")
-
             elif age_days < 180:
                 score += 10
                 signals.append("recent_domain")
@@ -220,11 +192,9 @@ def whois_risk(domain):
 # =========================
 
 def get_embeddings(model):
-
     global INTENT_EMB
 
     if INTENT_EMB is None:
-
         INTENT_EMB = {
             k: model.encode(v, convert_to_tensor=True)
             for k, v in INTENTS.items()
@@ -234,41 +204,23 @@ def get_embeddings(model):
 
 
 # =========================
-# HUMAN HELPERS
+# HUMAN LAYER
 # =========================
 
-def build_summary(score):
-
-    if score >= 80:
-        return "Intento de phishing crítico con alta probabilidad de robo de credenciales."
-
-    elif score >= 60:
-        return "Se detecta un patrón de fraude altamente sospechoso."
-
-    elif score >= 35:
-        return "Se detectan indicios de actividad sospechosa moderada."
-
-    elif score >= 15:
-        return "Existen algunas señales leves de riesgo."
-
-    return "No se detectan indicadores relevantes de amenaza."
-
-
 def build_text_analysis(signals):
-
     techniques = []
 
     if "urgency" in signals:
-        techniques.append("Uso de urgencia para presionar al usuario")
+        techniques.append("Uso de urgencia para manipular al usuario")
 
     if "threats" in signals:
-        techniques.append("Mensajes intimidatorios o de bloqueo")
+        techniques.append("Mensajes de presión o bloqueo")
 
     if "credentials" in signals:
-        techniques.append("Intento de obtención de credenciales")
+        techniques.append("Intento de robo de credenciales")
 
     if "reward" in signals:
-        techniques.append("Promesa de premios o recompensas")
+        techniques.append("Promesas de recompensa o premio")
 
     intention = (
         "Manipulación psicológica"
@@ -280,56 +232,22 @@ def build_text_analysis(signals):
 
 
 def build_url_analysis(domain, signals):
-
     if not domain:
-        return "-", "No se detectaron URLs"
+        return "-", "No se detectó URL"
 
     if "brand_impersonation" in signals:
-        return domain, "Posible suplantación de marca legítima"
+        return domain, "Posible suplantación de marca"
 
     if "phishing_keywords" in signals:
-        return domain, "Uso de palabras típicas de phishing"
+        return domain, "Uso de patrones típicos de phishing"
 
     if "very_new_domain" in signals:
-        return domain, "Dominio extremadamente reciente"
+        return domain, "Dominio recién registrado"
 
-    return domain, "Sin anomalías técnicas graves"
-
-
-def build_evidence(signals):
-
-    evidence = []
-
-    if "brand_impersonation" in signals:
-        evidence.append(
-            "El sistema detectó un intento de suplantación de marca"
-        )
-
-    if "credentials" in signals:
-        evidence.append(
-            "El contenido solicita credenciales o verificación de cuenta"
-        )
-
-    if "urgency" in signals:
-        evidence.append(
-            "El mensaje utiliza urgencia para presionar al usuario"
-        )
-
-    if "suspicious_link" in signals:
-        evidence.append(
-            "Se detectó un enlace potencialmente engañoso"
-        )
-
-    if "very_new_domain" in signals:
-        evidence.append(
-            "El dominio fue registrado recientemente"
-        )
-
-    return evidence
+    return domain, "Sin anomalías técnicas relevantes"
 
 
 def build_attack_chain(signals):
-
     chain = []
 
     if "brand_impersonation" in signals:
@@ -342,9 +260,42 @@ def build_attack_chain(signals):
         chain.append("Intento de robo de credenciales")
 
     if "suspicious_link" in signals:
-        chain.append("Redirección a sitio fraudulento")
+        chain.append("Enlace fraudulento")
 
     return chain
+
+
+def build_evidence(signals):
+    evidence = []
+
+    if "brand_impersonation" in signals:
+        evidence.append("Suplantación de marca detectada")
+
+    if "credentials" in signals:
+        evidence.append("Posible robo de credenciales")
+
+    if "urgency" in signals:
+        evidence.append("Uso de urgencia para manipulación")
+
+    if "suspicious_link" in signals:
+        evidence.append("Enlace sospechoso detectado")
+
+    if "very_new_domain" in signals:
+        evidence.append("Dominio recién creado")
+
+    return evidence
+
+
+def build_summary(score):
+    if score >= 80:
+        return "Intento de phishing crítico con alta probabilidad de robo de credenciales."
+    elif score >= 60:
+        return "Se detecta un patrón de fraude altamente sospechoso."
+    elif score >= 35:
+        return "Se detectan indicios de actividad sospechosa moderada."
+    elif score >= 15:
+        return "Existen algunas señales leves de riesgo."
+    return "No se detectan indicadores relevantes de amenaza."
 
 
 # =========================
@@ -354,99 +305,58 @@ def build_attack_chain(signals):
 def analyze_text(text: str):
 
     model = get_model()
-
     text = text or ""
 
-    embedding = model.encode(
-        text,
-        convert_to_tensor=True
-    )
+    embedding = model.encode(text, convert_to_tensor=True)
 
     semantic_hits = []
     url_signals = []
     whois_signals = []
 
-    # URL ANALYSIS
-
+    # URL
     urls = extract_urls(text)
 
     url_score = 0
-    main_domain = None
+    main_domain = "-"
 
     for url in urls:
-
         domain = extract_domain(url)
-
         main_domain = domain
 
         d_score, d_sig = domain_risk(domain)
         w_score, w_sig = whois_risk(domain)
 
         url_score += d_score + w_score
-
         url_signals.extend(d_sig)
         whois_signals.extend(w_sig)
 
     url_norm = clamp(url_score / MAX_URL_SCORE)
 
-    # ML ANALYSIS
-
+    # ML
     emb = get_embeddings(model)
 
     ml_score = 0
     benign_score = 0
 
     for intent, proto in emb.items():
-
-        sim = util.cos_sim(
-            embedding,
-            proto
-        ).item()
+        sim = util.cos_sim(embedding, proto).item()
 
         if sim > SIM_THRESHOLD:
-
-            semantic_hits.append(
-                SIGNAL_MAP[intent]
-            )
+            semantic_hits.append(SIGNAL_MAP[intent])
 
             if intent == "benign_security":
-
-                benign_score += (
-                    abs(WEIGHTS[intent]) * sim
-                )
-
+                benign_score += abs(WEIGHTS[intent]) * sim
             else:
+                ml_score += WEIGHTS[intent] * sim
 
-                ml_score += (
-                    WEIGHTS[intent] * sim
-                )
-
-    ml_norm = clamp(
-        (ml_score - benign_score)
-        / MAX_ML_SCORE
-    )
+    ml_norm = clamp((ml_score - benign_score) / MAX_ML_SCORE)
 
     # SIGNALS
+    all_signals = set(semantic_hits + url_signals + whois_signals)
 
-    all_signals = set(
-        semantic_hits +
-        url_signals +
-        whois_signals
-    )
-
-    identity_hits = len(
-        all_signals & identity_signals
-    )
-
-    behavior_hits = len(
-        all_signals & behavior_signals
-    )
-
-    infra_hits = len(
-        all_signals & infra_signals
-    )
-
-    # RULES
+    identity_hits = len(all_signals & identity_signals)
+    behavior_hits = len(all_signals & behavior_signals)
+    infra_hits = len(all_signals & infra_signals)
 
     rules_triggered = evaluate_rules(
         identity_hits,
@@ -455,122 +365,66 @@ def analyze_text(text: str):
         all_signals
     )
 
-    rule_score = clamp(
-        len(rules_triggered) * 0.15
-    )
-
-        # ATTACK CHAIN
+    rule_score = clamp(len(rules_triggered) * 0.15)
 
     attack_chain_score = 0.15 if (
-        identity_hits >= 1 and
-        behavior_hits >= 2
+        identity_hits >= 1 and behavior_hits >= 2
     ) else 0
 
-    # =========================
-    # PHISHING CONFIDENCE ENGINE
-    # =========================
-
     phishing_confidence = 0
-
     if "brand_impersonation" in all_signals:
         phishing_confidence += 0.15
-
     if "credentials" in all_signals:
         phishing_confidence += 0.20
-
     if "suspicious_link" in all_signals:
         phishing_confidence += 0.15
-
-    # combinación peligrosa
-    if (
-        "brand_impersonation" in all_signals and
-        "credentials" in all_signals
-    ):
-        phishing_confidence += 0.20
-
-    # phishing prácticamente confirmado
-    if (
-        "brand_impersonation" in all_signals and
-        "credentials" in all_signals and
-        "suspicious_link" in all_signals
-    ):
-        phishing_confidence += 0.25
-
-    # dominio recién creado
     if "very_new_domain" in all_signals:
         phishing_confidence += 0.15
 
-    phishing_confidence = clamp(
-        phishing_confidence
-    )
+    phishing_confidence = clamp(phishing_confidence)
 
-    # =========================
-    # FINAL RISK CALCULATION
-    # =========================
-
+    # FINAL RISK
     risk = (
         ml_norm * 0.35 +
         url_norm * 0.30 +
         rule_score * 0.15 +
-        (attack_chain_score * 0.20) +
+        attack_chain_score * 0.20 +
         phishing_confidence
     )
 
     risk = clamp(risk)
-
-    risk_score = int(risk * 100)
-
-    risk_bin = get_risk_bin(risk_score)
-
-    # HUMAN ANALYSIS
+    score = int(risk * 100)
+    level = get_risk_bin(score)
 
     intention, techniques = build_text_analysis(all_signals)
-
-    domain_info, domain_problem = build_url_analysis(
-        main_domain,
-        all_signals
-    )
+    domain, url_problem = build_url_analysis(main_domain, all_signals)
 
     return {
-
         "verdict": {
-            "level": risk_bin,
-            "score": risk_score,
+            "level": level,
+            "score": score,
             "action": (
-                "Bloquear inmediatamente"
-                if risk_bin == "critical"
-                else "Revisión urgente"
-                if risk_bin == "high"
-                else "Monitorizar"
-                if risk_bin == "medium"
+                "Bloquear inmediatamente" if level == "critical"
+                else "Revisión urgente" if level == "high"
+                else "Monitorizar" if level == "medium"
                 else "Sin acción necesaria"
             )
         },
 
-        "executive_summary": build_summary(
-            risk_score
-        ),
+        "executive_summary": build_summary(score),
 
         "analysis": {
-
             "text": {
                 "intention": intention,
                 "tecnicas": techniques
             },
-
             "url": {
-                "dominio": domain_info,
-                "problema": domain_problem
+                "dominio": domain,
+                "problema": url_problem
             }
         },
 
-        "cadena_ataque": build_attack_chain(
-            all_signals
-        ),
-
-        "evidencias": build_evidence(
-            all_signals
-        ),
-
+        "cadena_ataque": build_attack_chain(all_signals),
+        "evidencias": build_evidence(all_signals),
         "signals": list(all_signals)
     }

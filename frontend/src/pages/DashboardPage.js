@@ -261,9 +261,6 @@ const styles = {
     color: "#ef4444"
   },
 
-  center: {
-    flex: 1
-  },
 
   empty: {
     opacity: 0.6,
