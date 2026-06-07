@@ -1,185 +1,86 @@
-# 🛡️ Anti-Scam Detector
+# Anti-Scam Detector
 
-Sistema de **detección de phishing/estafas** para analizar **texto** y **URLs** con una aproximación híbrida:
+**Producto de decisión para combatir phishing y estafas**: convierte señales de un mensaje y/o enlace en una **acción recomendada** (bloquear, revisar o monitorizar) con **explicación y evidencia**.
 
-- **NLP semántico** (SentenceTransformer) para reconocer intenciones (p. ej. credenciales, suplantación, urgencia).
-- **Heurísticas de dominio** (keywords típicas, longitud y señales de “suplantación”).
-- **Señales de reputación (WHOIS)** opcionales (si están disponibles en el entorno).
-
-> ⚠️ Importante: la herramienta ofrece una **evaluación orientativa** basada en patrones. No garantiza la legitimidad del mensaje o dominio.
+Diseñado para equipos que no pueden permitirse “mirar y pensar”: necesitan **responder rápido** y justificar por qué.
 
 ---
 
-## ✨ Funcionalidades
-
-- Entrada por **tipo de contenido**:
-  - Mensajes (texto)
-  - Enlaces (URL) (vía campo `url` o URL embebida dentro del texto)
-- Resultado orientado a UI:
-  - `verdict.level` (bin semántico para el “traffic light”)
-  - `verdict.score` (0..100)
-  - `executive_summary` (resumen)
-  - `analysis.text` (intención y técnicas)
-  - `analysis.url` (dominio y problema)
-  - `cadena_ataque` (pasos de posible ataque)
-  - `evidencias` (evidencias detectadas)
+## El problema (en lenguaje de negocio)
+Los intentos de phishing no se notan a simple vista: combinan redacción convincente, urgencia emocional y enlaces que aparentan legitimidad. Cuanto más tarde el triage, mayor es el impacto (fraude, credenciales comprometidas, interrupción operativa).
 
 ---
 
-## 🧩 Arquitectura
+## La solución
+Anti-Scam Detector evalúa un input y devuelve un paquete listo para UI/operación:
 
-```
-anti-scam-detector/
-├─ backend/
-│  ├─ server.py                 # API FastAPI
-│  └─ analysis_engine.py       # Motor de análisis (NLP + heurísticas)
-│  └─ soc/                     # reglas / correlación / persistencia
-└─ frontend/
-   ├─ src/
-   │  ├─ pages/DashboardPage.js # UI principal (entrada + reporte)
-   │  └─ api/client.js          # cliente axios
-   │  └─ utils/device.js       # persistencia de device_id en localStorage
-```
+- **`verdict.score` (0..100)**: nivel de riesgo cuantificado.
+- **`verdict.level`**: `safe | low | medium | high | critical`.
+- **`verdict.action`**: recomendación accionable.
+- **Explicación**: factores dominantes + evidencia.
+- **`cadena_ataque`**: resumen de los pasos típicos del intento.
 
 ---
 
-## 🔁 API (Backend)
+## ¿Para quién es?
+- **SOC / Ciberseguridad**: triage más rápido, priorización de alertas y explicación para auditoría.
+- **Operaciones y Soporte**: detección temprana para reducir caídas antes de que ocurran.
+- **Equipos de Riesgo / Compliance**: justificación reproducible de la decisión.
 
-### Endpoints
+---
 
-- `GET /api/health`
-- `GET /api/analyze` ❌ (no existe)
-- `POST /api/analyze`
-- `GET /api/history` (mock)
-- `GET /api/stats` (mock)
+## Diferenciadores
+- **Decisión con evidencia**, no solo “score”.
+- **Explicable y consistente**: misma lógica para texto y enlaces.
+- **Enfoque híbrido**: señales de lenguaje + señales del dominio/enlace + reglas de correlación.
+- **Estabilización del binning** mediante historial para evitar saltos erráticos.
 
+---
+
+## Experiencia de uso (workflow)
+1. El usuario/analista pega un mensaje o captura un enlace.
+2. La UI muestra un **traffic light** y una **acción sugerida**.
+3. El equipo ejecuta el paso recomendado.
+4. El resultado incluye “**por qué**” y “**qué señales**” para mejorar el proceso y el aprendizaje.
+
+---
+
+## Cómo integrarlo (API)
 ### `POST /api/analyze`
+**Body (JSON)** (campos opcionales):
+- `text`: texto a evaluar
+- `url`: enlace a evaluar
+- `input_type`: `text` o `url` (por defecto `text`)
 
-**Request (JSON):**
-
-- El backend acepta `text` y/o `url`.
-- Se procesa el campo:
-  - `content = data.text or data.url or ""`
-
-Ejemplo (texto):
-
+**Ejemplo**:
 ```json
 {
-  "text": "...",
+  "text": "Verifica tu cuenta inmediatamente y accede ahora.",
   "url": null,
   "input_type": "text"
 }
 ```
 
-Ejemplo (URL):
-
-```json
-{
-  "text": null,
-  "url": "https://ejemplo.com",
-  "input_type": "url"
-}
-```
-
-**Headers opcionales:**
-- `X-Device-ID` (si no se envía, se usa `anonymous`)
-
-**Response (JSON):**
-
-```json
-{
-  "id": "YYYYMMDDHHMMSS",
-  "device": "anonymous",
-  "verdict": {
-    "level": "safe|medium|high|critical",
-    "score": 0,
-    "action": "..."
-  },
-  "executive_summary": "...",
-  "analysis": {
-    "text": {
-      "intention": "...",
-      "tecnicas": ["..."]
-    },
-    "url": {
-      "dominio": "...",
-      "problema": "..."
-    }
-  },
-  "cadena_ataque": ["..."],
-  "evidencias": ["..."],
-  "signals": ["..."]
-}
-```
-
-**Errores:**
-- `400` con `detail: "Empty input"` si `text`/`url` resultan vacíos.
+**Salida**: JSON con `verdict`, `executive_summary`, `analysis` y evidencias.
 
 ---
 
-## 🧠 Motor de análisis (high-level)
-
-1. **Extracción de URLs** desde el texto (si aplica) y obtención del dominio.
-2. **Riesgo de dominio** con heurísticas:
-   - señales de posible **suplantación** por keywords de marcas
-   - keywords típicas de phishing (login/secure/verify/account)
-   - longitudes anómalas
-3. **WHOIS (opcional)**:
-   - si está disponible, estima riesgo por antigüedad
-   - si falla, **no penaliza** (se captura la excepción)
-4. **Análisis semántico (NLP)**:
-   - embedding del texto
-   - similitud con prototipos de intenciones (`INTENTS`)
-   - scoring ponderado y transformación a 0..100
-5. **Reglas** (`soc_rules`) y construcción de salida humana:
-   - intención + técnicas
-   - problema del dominio
-   - cadena de ataque
-   - evidencias
+## Roadmap (lo que haríamos para convertirlo en versión “enterprise-ready”)
+- Persistencia real de historial y calibración por dispositivo/usuario.
+- Métricas de desempeño por categoría (precisión, recall, FPR) y tuning continuo.
+- Ampliar cobertura de señales del dominio (patrones adicionales, infraestructura, ASN/TLD, etc.).
+- Panel de analista: trending, justificación, y exportación para auditoría.
 
 ---
 
-## 🚦 Niveles de riesgo (según UI)
-
-El frontend interpreta `verdict.level` como:
-
-- `safe`
-- `medium` (riesgo medio)
-- `high` (riesgo alto)
-- `critical` (riesgo crítico)
-
----
-
-## ⚙️ Requisitos del sistema
-
+## Requisitos y ejecución rápida
 ### Backend
-- Python 3.10+
-- Dependencias en `backend/requirements.txt`
+```bash
+pip install -r requirements.txt
+.venv\\Scripts\\uvicorn backend.server:app --reload --port 8000
+```
 
 ### Frontend
-- Node.js 16+
-- React (CRA)
-
----
-
-## 🚀 Setup y ejecución
-
-### 1) Backend (FastAPI)
-
-```bash
-cd backend
-python -m venv .venv
-. .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn server:app --reload --port 8000
-```
-
-API esperada:
-- `http://localhost:8000/api/health`
-- `http://localhost:8000/api/analyze`
-
-### 2) Frontend (React)
-
 ```bash
 cd frontend
 npm install
@@ -188,29 +89,11 @@ npm start
 
 ---
 
-## 🧪 Ejemplo rápido (curl)
-
-```bash
-curl -X POST http://localhost:8000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Recuerda verificar tu cuenta inmediatamente. Accede aquí: http://example.com/login","url":null,"input_type":"text"}'
-```
+## Nota de confianza
+El motor es **orientativo**: no sustituye controles de seguridad ni verificación externa. Está optimizado para ayudar a equipos a tomar decisiones consistentes y rápidas.
 
 ---
 
-## 📌 Notas / Limitaciones
-
-- WHOIS puede fallar según la red o restricciones del entorno.
-- El scoring depende del ajuste de:
-  - prototipos semánticos (`INTENTS`)
-  - umbral de similitud
-  - heurísticas de dominio
-- No reemplaza controles de seguridad del cliente ni validaciones externas.
-
----
-
-## 👤 Autor
-
-Miguel Ángel Cuesta  
-Cybersecurity & GRC Analyst
+## Contacto
+Miguel Ángel Cuesta
 

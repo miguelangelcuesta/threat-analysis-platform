@@ -1,18 +1,5 @@
-export default function TrafficLight({ riskBin }) {
-
-  const normalized = String(riskBin || "safe")
-    .trim()
-    .toLowerCase();
-
-  const config = {
-    safe: "#22c55e",
-    low: "#38bdf8",
-    medium: "#facc15",
-    high: "#fb923c",
-    critical: "#ef4444"
-  };
-
-  const color = config[normalized] || "#22c55e";
+export default function TrafficLight({ ui }) {
+  const color = ui?.color || "#999";
 
   return (
     <div style={{ display: "flex", alignItems: "center" }}>

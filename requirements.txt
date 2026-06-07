@@ -1,15 +1,20 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
+fastapi==0.115.6
+uvicorn==0.32.1
+starlette==0.41.3
 pydantic==2.9.2
-python-dotenv==1.0.1
+python-dotenv==1.2.2
+
+# Evitar compilar numpy en Windows (usa wheel ya compilado)
+numpy==1.26.4
 
 sentence-transformers==3.1.1
-torch==2.5.1
+safetensors==0.4.5
 
-numpy==2.1.1
-scikit-learn==1.5.2
+# Torch (wheel suele venir ya listo; si tu CPU/GPU no encaja, se ajusta después)
+torch==2.3.1
 
-python-whois==0.9.6
-python-dateutil==2.9.0.post0
+SQLAlchemy==2.0.36
+python-whois
 
-sqlalchemy==2.0.30
+transformers==4.46.3
+regex==2025.10.22

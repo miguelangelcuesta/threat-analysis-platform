@@ -1,1 +1,1 @@
-web: uvicorn backend.server:app --host 0.0.0.0 --port 10000
+web: .venv\Scripts\uvicorn backend.server:app --host 0.0.0.0 --port 10000

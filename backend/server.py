@@ -59,19 +59,13 @@ class AnalyzeRequest(BaseModel):
 # =====================
 
 @api.post("/analyze")
-async def analyze(
-    data: AnalyzeRequest,
-    x_device_id: str = Header(default="anonymous")
-):
+async def analyze(data: AnalyzeRequest, x_device_id: str = Header(default="anonymous")):
 
     try:
         content = data.text or data.url or ""
 
         if not content.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Empty input"
-            )
+            raise HTTPException(status_code=400, detail="Empty input")
 
         analysis = analyze_text(content)
 
@@ -81,15 +75,15 @@ async def analyze(
             **analysis
         }
 
-    except HTTPException:
-        raise
-
     except Exception as e:
+        import traceback
+        print("\n🔥 FULL BACKEND ERROR:\n")
+        print(traceback.format_exc())
+
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis engine error: {str(e)}"
+            detail=str(e)
         )
-
 # =====================
 # ENDPOINTS AUX
 # =====================
@@ -109,6 +103,12 @@ async def stats():
 @api.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/health")
+async def health_root():
+    return {"status": "ok"}
+
 
 @api.get("/")
 async def root():
