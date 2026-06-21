@@ -6,13 +6,25 @@ import socket
 from collections import deque
 from datetime import datetime, date
 from urllib.parse import urlparse
-
+from backend.engines.url_utils import extract_urls, extract_domain, domain_resolves
 from sentence_transformers import SentenceTransformer, util
 from backend.soc.soc_rules import evaluate_rules
 from backend.reasoning_engine import build_reasoning
 from backend.context_builder import build_context
 from backend.llm_engine import generate_reasoning
 from datetime import datetime, date
+from backend.engines.scoring_utils import (
+    clamp,
+    get_risk_bin,
+    percentile_bin
+)
+from backend.engines.explainability_engine import (
+    build_text_analysis,
+    build_url_analysis,
+    build_attack_chain,
+    build_evidence,
+    build_summary
+)
 
 
 # =========================
@@ -142,57 +154,6 @@ infra_signals = {
 
 
 # =========================
-# HELPERS
-# =========================
-
-def extract_urls(text):
-
-    if not text:
-        return []
-
-    pattern = (
-        r'(https?://[^\s]+|www\.[^\s]+|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})'
-    )
-
-    urls = re.findall(pattern, text)
-
-    normalized = []
-
-    for url in urls:
-
-        if not url.startswith(("http://", "https://")):
-            normalized.append("https://" + url)
-        else:
-            normalized.append(url)
-
-    return normalized
-
-
-def extract_domain(url):
-    try:
-        netloc = urlparse(url).netloc.lower()
-
-        # limpieza básica pero segura
-        netloc = netloc.strip()
-
-        # quitar solo un www real (no múltiples corrupciones)
-        if netloc.startswith("www."):
-            netloc = netloc[4:]
-
-        # eliminar puertos si existen
-        netloc = netloc.split(":")[0]
-
-        return netloc
-
-    except:
-        return ""
-
-
-def clamp(x):
-    return max(0.0, min(1.0, x))
-
-
-# =========================
 # UI MAP (SINGLE SOURCE OF TRUTH)
 # =========================
 
@@ -223,37 +184,6 @@ UI_MAP = {
         "label": "RIESGO CRÍTICO"
     }
 }
-
-
-# =========================
-# RISK LEVEL (CALIBRADO)
-# =========================
-
-def get_risk_bin(score):
-    if score >= 75:
-        return "critical"
-    elif score >= 60:
-        return "high"
-    elif score >= 40:
-        return "medium"
-    elif score >= 25:
-        return "low"
-    return "safe"
-
-
-# =========================
-# DOMAIN ANALYSIS
-# =========================
-
-
-
-
-def domain_resolves(domain: str) -> bool:
-    try:
-        socket.gethostbyname(domain)
-        return True
-    except:
-        return False
 
 
 def domain_risk(domain):
@@ -321,7 +251,6 @@ def domain_risk(domain):
 # =========================
 # WHOIS
 # =========================
-
 
 def whois_risk(domain):
     score = 0
@@ -433,7 +362,6 @@ def trust_score(domain):
 
     return score, signals
 
-
 # =========================
 # EMBEDDINGS
 # =========================
@@ -449,190 +377,11 @@ def get_embeddings(model):
 
     return INTENT_EMB
 
-
-# =========================
-# HUMAN LAYER
-# =========================
-
-
-def build_text_analysis(signals):
-
-    introductions = [
-        "Durante el análisis del contenido,",
-        "Tras evaluar el texto analizado,",
-        "El motor de análisis ha identificado que",
-        "La evaluación del mensaje indica que",
-        "Del análisis realizado se desprende que"
-    ]
-
-    social_signals = {
-        "brand_impersonation",
-        "credentials",
-        "urgency",
-        "threats",
-        "reward",
-        "suspicious_link"
-    }
-
-    detected = [s for s in signals if s in social_signals]
-
-    if len(detected) >= 4:
-        return (
-            "Posible ingeniería social",
-            f"{random.choice(introductions)} se detecta una combinación significativa de indicadores compatibles con phishing y manipulación del usuario. Este patrón suele aparecer en campañas activas de fraude digital."
-        )
-
-    if len(detected) >= 2:
-        return (
-            "Posible ingeniería social",
-            f"{random.choice(introductions)} se han identificado varios indicadores asociados a técnicas de ingeniería social, aunque no son suficientes por sí solos para confirmar un ataque."
-        )
-
-    if len(detected) == 1:
-        return (
-            "Bajo nivel de riesgo",
-            f"{random.choice(introductions)} se ha detectado un indicador compatible con técnicas de ingeniería social, aunque de forma aislada no resulta concluyente."
-        )
-
-    return (
-        "Sin indicadores relevantes",
-        f"{random.choice(introductions)} no se observan patrones claros de ingeniería social o phishing en el contenido analizado."
-    )
-
-
-
-def build_url_analysis(domain, url_signals):
-
-    # =========================
-    # CASO 0: SIN DOMINIO
-    # =========================
-    if not domain or domain == "-":
-        return (
-            "-",
-            "No se ha detectado ninguna URL en el contenido analizado."
-        )
-
-    # =========================
-    # CASO CRÍTICO: NO EXISTE
-    # =========================
-    if "domain_unresolvable" in url_signals:
-        return (
-            domain,
-            "El dominio no resuelve en DNS, lo que indica que no existe o no está activo públicamente. Este patrón es frecuente en dominios utilizados en campañas de phishing o infraestructuras desechables."
-        )
-
-    # =========================
-    # CASO ALTO: BRAND / IMPERSONATION
-    # =========================
-    if "brand_impersonation" in url_signals:
-        return (
-            domain,
-            "Se detectan indicios de posible suplantación de identidad mediante el uso de marcas reconocidas o patrones similares a dominios legítimos."
-        )
-
-    # =========================
-    # CASO MEDIO: DOMINIO SOSPECHOSO
-    # =========================
-    medium = {"recent_domain", "long_domain", "phishing_keywords"}
-
-    if any(s in url_signals for s in medium):
-        return (
-            domain,
-            "El dominio presenta características estructurales o temporales que requieren verificación adicional antes de considerarlo confiable."
-        )
-
-    # =========================
-    # CASO BAJO: NORMAL
-    # =========================
-    return (
-        domain,
-        "El dominio responde correctamente y no se observan anomalías técnicas relevantes en el análisis básico. Esto no implica legitimidad, solo ausencia de señales de riesgo."
-    )
-def build_attack_chain(signals):
-    chain = []
-
-    if "brand_impersonation" in signals:
-        chain.append("Suplantación de identidad")
-    if "urgency" in signals:
-        chain.append("Presión psicológica")
-    if "credentials" in signals:
-        chain.append("Intento de robo de credenciales")
-    if "suspicious_link" in signals:
-        chain.append("Enlace fraudulento")
-
-    return chain
-
-
-def build_evidence(signals):
-    evidence = []
-
-    if "brand_impersonation" in signals:
-        evidence.append("Suplantación de marca detectada")
-    if "credentials" in signals:
-        evidence.append("Posible robo de credenciales")
-    if "urgency" in signals:
-        evidence.append("Uso de urgencia para manipulación")
-    if "suspicious_link" in signals:
-        evidence.append("Enlace sospechoso detectado")
-    if "very_new_domain" in signals:
-        evidence.append("Dominio recién creado")
-
-    return evidence
-
-
-def build_summary(score):
-    if score >= 85:
-        return "Intento de phishing crítico con alta probabilidad de robo de credenciales."
-    elif score >= 65:
-        return "Se detecta un patrón de fraude altamente sospechoso."
-    elif score >= 40:
-        return "Se detectan indicios de actividad sospechosa moderada."
-    elif score >= 20:
-        return "Existen algunas señales leves de riesgo."
-    return "No se detectan indicadores relevantes de amenaza"
-
-
-# =========================
-# NORMALIZACIÓN ESTABLE
-# =========================
-
-# NOTE: funciones eliminadas porque no se usan en el motor actual:
-# - percentile_score
-# - calibrate
-
-
-def percentile_bin(score, history):
-
-    if len(history) < 30:
-        if score >= 75:
-            return "critical"
-        elif score >= 60:
-            return "high"
-        elif score >= 40:
-            return "medium"
-        elif score >= 25:
-            return "low"
-        return "safe"
-
-    arr = np.array(history)
-    p = np.sum(arr < score) / len(arr)
-
-    if p >= 0.90:
-        return "critical"
-    elif p >= 0.75:
-        return "high"
-    elif p >= 0.40:
-        return "medium"
-    elif p >= 0.15:
-        return "low"
-    return "safe"
-
 # =========================
 # MAIN ENGINE
 # =========================
 
 def analyze_text(text: str):
-
     model = get_model()
     text = text or ""
 
@@ -684,8 +433,6 @@ def analyze_text(text: str):
         url_norm = min(1.0, url_norm + 0.5)
         url_signals.append("domain_unresolvable")
 
-    
-
     # =========================
     # ML SCORE
     # =========================
@@ -705,7 +452,7 @@ def analyze_text(text: str):
             "impersonation": 0.40,
             "credentials": 0.30,
             "threats": 0.35,
-            "urgency": 0.25,
+            "urgency": 0.45,
             "reward": 0.35,
             "suspicious_link": 0.30,
             "benign_security": 0.45
@@ -746,7 +493,6 @@ def analyze_text(text: str):
     ml_norm = ml_norm - (benign_score / MAX_ML_SCORE)
     ml_norm = clamp(ml_norm)
 
-
     # =========================
     # SIGNALS
     # =========================
@@ -756,7 +502,6 @@ def analyze_text(text: str):
     url_signals +
     whois_signals
 )
-
     identity_hits = len(all_signals & identity_signals)
     behavior_hits = len(all_signals & behavior_signals)
     infra_hits = len(all_signals & infra_signals)
@@ -776,14 +521,11 @@ def analyze_text(text: str):
     whois_signals,
     rules_triggered
 )
-
-
     # =========================
 # ATTACK PATTERN SCORE
 # =========================
 
     attack_chain_score = 0.10 if (identity_hits >= 1 and behavior_hits >= 2) else 0.0
-
 
     # =========================
     # CRITICAL LAYER (UNIFICADO)
@@ -808,7 +550,6 @@ def analyze_text(text: str):
 
     critical_layer = clamp(critical_layer)
 
-        
     # =========================
     # FINAL SCORE (CALIBRADO REAL)
     # =========================
@@ -819,7 +560,6 @@ def analyze_text(text: str):
     critical_layer * 0.35 +
     ml_norm * 0.15
 )
-    
     # =========================
 # SOC CRITICAL OVERRIDE LAYER
 # =========================
@@ -860,14 +600,12 @@ def analyze_text(text: str):
 
     raw_risk = clamp(raw_risk + confidence_adjust)
 
-
     # =========================
     # SCORE FINAL
     # =========================
 
     score = int(raw_risk * 100)
     score = max(0, min(score, 100))
-
 
     # =========================
     # BINNING ESTABLE
@@ -877,7 +615,6 @@ def analyze_text(text: str):
 
     level = percentile_bin(score, RISK_HISTORY)
     ui = UI_MAP[level]
-    
     
     # =========================
     # NORMALIZACIÓN PARA LLM
@@ -893,7 +630,6 @@ def analyze_text(text: str):
 
     level = level_map.get(level, level)
 
-
     # =========================
     # CONFIDENCE (UNA SOLA VEZ)
     # =========================
@@ -904,7 +640,6 @@ def analyze_text(text: str):
         whois_signals,
         rules_triggered
     )
-
 
     # =========================
     # CONTEXT (LLM)
@@ -933,9 +668,7 @@ def analyze_text(text: str):
         "rules": len(rules_triggered)
     }
 }
-
     llm_reasoning = generate_reasoning(llm_context)
-
 
     # =========================
     # OUTPUT ANALYSIS BLOCKS
@@ -961,9 +694,9 @@ def analyze_text(text: str):
 
     reasoning["why_this_score"] = llm_reasoning["why_this_score"]
 
-
     print("SIGNALS:", all_signals)
     print("SCORE:", score)
+    
     # =========================
     # RETURN FINAL RESPONSE
     # =========================
