@@ -1,12 +1,18 @@
 import re
 import math
 import numpy as np
+import random
+import socket
 from collections import deque
 from datetime import datetime, date
 from urllib.parse import urlparse
 
 from sentence_transformers import SentenceTransformer, util
 from backend.soc.soc_rules import evaluate_rules
+from backend.reasoning_engine import build_reasoning
+from backend.context_builder import build_context
+from backend.llm_engine import generate_reasoning
+from datetime import datetime, date
 
 
 # =========================
@@ -16,12 +22,12 @@ from backend.soc.soc_rules import evaluate_rules
 _model = None
 INTENT_EMB = None
 
-SIM_THRESHOLD = 0.18
+SIM_THRESHOLD = 0.30
 
 MAX_URL_SCORE = 100
 MAX_ML_SCORE = 120
 
-# 📊 historial para calibración
+#  historial para calibración
 RISK_HISTORY = deque(maxlen=500)
 
 
@@ -51,16 +57,35 @@ equipo de seguridad verificación de identidad alerta de seguridad acceso seguro
     "credentials": """
 contraseña iniciar sesión credenciales acceso usuario autenticación pin código
 introduce tu contraseña verifica tu cuenta banco login acceso seguro
+
+verifique su cuenta
+confirme su cuenta
+actualice sus datos
+actualice la información
+validar identidad
+confirmar identidad
+confirmar acceso
+datos de acceso
+credenciales de acceso
 """,
 
     "threats": """
 cuenta suspendida bloqueada desactivada restringida acceso denegado
 alerta de seguridad advertencia final eliminación permanente cuenta comprometida
 """,
-
     "urgency": """
 urgente inmediatamente ahora acción requerida tiempo limitado última advertencia
 actúa ya responde hoy en minutos respuesta inmediata
+
+verifique inmediatamente
+verifica ahora
+actúe inmediatamente
+acción urgente requerida
+requiere atención inmediata
+debe actuar ahora
+evite la suspensión
+último aviso
+última oportunidad
 """,
 
     "reward": """
@@ -121,12 +146,44 @@ infra_signals = {
 # =========================
 
 def extract_urls(text):
-    return re.findall(r'(https?://[^\s]+)', text or "")
+
+    if not text:
+        return []
+
+    pattern = (
+        r'(https?://[^\s]+|www\.[^\s]+|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})'
+    )
+
+    urls = re.findall(pattern, text)
+
+    normalized = []
+
+    for url in urls:
+
+        if not url.startswith(("http://", "https://")):
+            normalized.append("https://" + url)
+        else:
+            normalized.append(url)
+
+    return normalized
 
 
 def extract_domain(url):
     try:
-        return urlparse(url).netloc.replace("www.", "").lower()
+        netloc = urlparse(url).netloc.lower()
+
+        # limpieza básica pero segura
+        netloc = netloc.strip()
+
+        # quitar solo un www real (no múltiples corrupciones)
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+
+        # eliminar puertos si existen
+        netloc = netloc.split(":")[0]
+
+        return netloc
+
     except:
         return ""
 
@@ -143,17 +200,17 @@ UI_MAP = {
     "safe": {
         "color": "#22c55e",
         "bg": "#071a12",
-        "label": "SEGURO"
+        "label": "SIN INDICADORES RELEVANTES"
     },
     "low": {
         "color": "#38bdf8",
         "bg": "#0a1f2a",
-        "label": "BAJO RIESGO"
+        "label": "RIESGO BAJO"
     },
     "medium": {
         "color": "#facc15",
         "bg": "#2a240a",
-        "label": "RIESGO MEDIO"
+        "label": "PRECAUCION"
     },
     "high": {
         "color": "#fb923c",
@@ -163,7 +220,7 @@ UI_MAP = {
     "critical": {
         "color": "#ef4444",
         "bg": "#2a0707",
-        "label": "CRÍTICO"
+        "label": "RIESGO CRÍTICO"
     }
 }
 
@@ -189,41 +246,82 @@ def get_risk_bin(score):
 # =========================
 
 
+
+
+def domain_resolves(domain: str) -> bool:
+    try:
+        socket.gethostbyname(domain)
+        return True
+    except:
+        return False
+
+
 def domain_risk(domain):
     score = 0
     signals = []
 
     if not domain:
-        return 0, []
+        return 0, ["empty_domain"]
 
-    legit = [
-        "paypal.com",
+    TRUSTED_DOMAINS = {
+        "msn.com",
         "google.com",
+        "microsoft.com",
         "amazon.com",
-        "amazon.es",
         "apple.com",
-        "microsoft.com"
-    ]
+        "paypal.com",
+        "mundodeportivo.com"
+    }
 
-    if any(b in domain for b in ["paypal", "google", "amazon", "apple", "microsoft"]):
-        if not any(domain.endswith(d) for d in legit):
+    # =========================
+    # TRUST LAYER (NO RISK)
+    # =========================
+    if domain in TRUSTED_DOMAINS:
+        signals.append("trusted_domain")
+    else:
+        signals.append("unknown_domain")
+        score += 8
+    # =========================
+# DNS / EXISTENCIA REAL
+# =========================
+
+    if not domain_resolves(domain):
+        signals.append("domain_unresolvable")
+        signals.append("domain_non_existent")
+
+        # esto ya NO es "10 puntos"
+        # es un comportamiento crítico en phishing real
+        score += 35
+    # =========================
+    # BRAND IMPERSONATION (ALTO IMPACTO)
+    # =========================
+    brands = ["paypal", "google", "amazon", "apple", "microsoft"]
+
+    if any(b in domain for b in brands):
+        if domain not in TRUSTED_DOMAINS:
             score += 40
             signals.append("brand_impersonation")
 
+    # =========================
+    # PHISHING KEYWORDS
+    # =========================
     if any(k in domain for k in ["login", "secure", "verify", "account"]):
         score += 15
         signals.append("phishing_keywords")
 
+    # =========================
+    # OBFUSCATION
+    # =========================
     if len(domain) > 30:
         score += 10
         signals.append("long_domain")
 
     return score, signals
 
-
 # =========================
 # WHOIS
 # =========================
+
 
 def whois_risk(domain):
     score = 0
@@ -234,24 +332,104 @@ def whois_risk(domain):
         w = whois.whois(domain)
         creation = w.creation_date
 
+        if not creation:
+            return 10, ["no_whois_data"]
+
         if isinstance(creation, list):
             creation = creation[0]
 
-        if creation:
-            if isinstance(creation, date):
-                creation = datetime.combine(creation, datetime.min.time())
+        if isinstance(creation, date):
+            creation = datetime.combine(creation, datetime.min.time())
 
-            age_days = (datetime.now() - creation).days
+        age_days = (datetime.now() - creation).days
 
-            if age_days < 30:
-                score += 30
-                signals.append("very_new_domain")
-            elif age_days < 180:
-                score += 10
-                signals.append("recent_domain")
+        # =========================
+        # VERY NEW DOMAIN (ALTO RIESGO)
+        # =========================
+        if age_days < 30:
+            score += 25
+            signals.append("very_new_domain")
 
-    except:
-        pass
+        # =========================
+        # RECENT DOMAIN (RIESGO MEDIO)
+        # =========================
+        elif age_days < 180:
+            score += 10
+            signals.append("recent_domain")
+
+        # =========================
+        # ESTABLE (SIN RIESGO)
+        # =========================
+        else:
+            signals.append("established_domain")
+
+    except Exception:
+        return 10, ["whois_lookup_failed"]
+
+    return score, signals
+
+def confidence_score(semantic_hits, url_signals, whois_signals, rules_triggered):
+    score = 1.0
+    signals = []
+
+    if len(semantic_hits) == 0:
+        score -= 0.25
+        signals.append("no_semantic_evidence")
+
+    if len(url_signals) == 0:
+        score -= 0.15
+        signals.append("no_url_evidence")
+
+    if len(whois_signals) == 0:
+        score -= 0.10
+        signals.append("no_whois_evidence")
+
+    if len(rules_triggered) == 0:
+        score -= 0.15
+        signals.append("no_rule_evidence")
+
+    if len(semantic_hits) > 0 and len(url_signals) == 0:
+        score -= 0.10
+        signals.append("signal_mismatch")
+
+    score = max(0.0, min(1.0, score))
+
+    return score, signals
+
+def trust_score(domain):
+    signals = []
+
+    if not domain:
+        return 0.5, ["no_domain"]
+
+    TRUSTED_DOMAINS = {
+        "msn.com",
+        "google.com",
+        "microsoft.com",
+        "amazon.com",
+        "apple.com",
+        "paypal.com",
+        "mundodeportivo.com"
+    }
+
+    if domain in TRUSTED_DOMAINS:
+        return 1.0, ["trusted_domain"]
+
+    score = 0.5
+
+    if domain.endswith((".com", ".es", ".org", ".net")):
+        score += 0.2
+        signals.append("standard_tld")
+
+    if domain.count(".") > 2:
+        score -= 0.2
+        signals.append("many_subdomains")
+
+    if any(k in domain for k in ["login", "secure", "verify", "account"]):
+        score -= 0.3
+        signals.append("suspicious_keywords")
+
+    score = max(0.0, min(1.0, score))
 
     return score, signals
 
@@ -276,42 +454,100 @@ def get_embeddings(model):
 # HUMAN LAYER
 # =========================
 
+
 def build_text_analysis(signals):
-    techniques = []
 
-    if "urgency" in signals:
-        techniques.append("Uso de urgencia para manipular al usuario")
+    introductions = [
+        "Durante el análisis del contenido,",
+        "Tras evaluar el texto analizado,",
+        "El motor de análisis ha identificado que",
+        "La evaluación del mensaje indica que",
+        "Del análisis realizado se desprende que"
+    ]
 
-    if "threats" in signals:
-        techniques.append("Mensajes de presión o bloqueo")
+    social_signals = {
+        "brand_impersonation",
+        "credentials",
+        "urgency",
+        "threats",
+        "reward",
+        "suspicious_link"
+    }
 
-    if "credentials" in signals:
-        techniques.append("Intento de robo de credenciales")
+    detected = [s for s in signals if s in social_signals]
 
-    if "reward" in signals:
-        techniques.append("Promesas de recompensa o premio")
+    if len(detected) >= 4:
+        return (
+            "Posible ingeniería social",
+            f"{random.choice(introductions)} se detecta una combinación significativa de indicadores compatibles con phishing y manipulación del usuario. Este patrón suele aparecer en campañas activas de fraude digital."
+        )
 
-    intention = "Manipulación psicológica" if techniques else "Sin intención sospechosa clara"
+    if len(detected) >= 2:
+        return (
+            "Posible ingeniería social",
+            f"{random.choice(introductions)} se han identificado varios indicadores asociados a técnicas de ingeniería social, aunque no son suficientes por sí solos para confirmar un ataque."
+        )
 
-    return intention, techniques
+    if len(detected) == 1:
+        return (
+            "Bajo nivel de riesgo",
+            f"{random.choice(introductions)} se ha detectado un indicador compatible con técnicas de ingeniería social, aunque de forma aislada no resulta concluyente."
+        )
 
-
-def build_url_analysis(domain, signals):
-    if not domain:
-        return "-", "No se detectó URL"
-
-    if "brand_impersonation" in signals:
-        return domain, "Posible suplantación de marca"
-
-    if "phishing_keywords" in signals:
-        return domain, "Uso de patrones típicos de phishing"
-
-    if "very_new_domain" in signals:
-        return domain, "Dominio recién registrado"
-
-    return domain, "Sin anomalías técnicas relevantes"
+    return (
+        "Sin indicadores relevantes",
+        f"{random.choice(introductions)} no se observan patrones claros de ingeniería social o phishing en el contenido analizado."
+    )
 
 
+
+def build_url_analysis(domain, url_signals):
+
+    # =========================
+    # CASO 0: SIN DOMINIO
+    # =========================
+    if not domain or domain == "-":
+        return (
+            "-",
+            "No se ha detectado ninguna URL en el contenido analizado."
+        )
+
+    # =========================
+    # CASO CRÍTICO: NO EXISTE
+    # =========================
+    if "domain_unresolvable" in url_signals:
+        return (
+            domain,
+            "El dominio no resuelve en DNS, lo que indica que no existe o no está activo públicamente. Este patrón es frecuente en dominios utilizados en campañas de phishing o infraestructuras desechables."
+        )
+
+    # =========================
+    # CASO ALTO: BRAND / IMPERSONATION
+    # =========================
+    if "brand_impersonation" in url_signals:
+        return (
+            domain,
+            "Se detectan indicios de posible suplantación de identidad mediante el uso de marcas reconocidas o patrones similares a dominios legítimos."
+        )
+
+    # =========================
+    # CASO MEDIO: DOMINIO SOSPECHOSO
+    # =========================
+    medium = {"recent_domain", "long_domain", "phishing_keywords"}
+
+    if any(s in url_signals for s in medium):
+        return (
+            domain,
+            "El dominio presenta características estructurales o temporales que requieren verificación adicional antes de considerarlo confiable."
+        )
+
+    # =========================
+    # CASO BAJO: NORMAL
+    # =========================
+    return (
+        domain,
+        "El dominio responde correctamente y no se observan anomalías técnicas relevantes en el análisis básico. Esto no implica legitimidad, solo ausencia de señales de riesgo."
+    )
 def build_attack_chain(signals):
     chain = []
 
@@ -411,7 +647,7 @@ def analyze_text(text: str):
     # =========================
 
     urls = extract_urls(text)
-
+    
     url_score = 0
     main_domain = "-"
 
@@ -421,13 +657,34 @@ def analyze_text(text: str):
 
         d_score, d_sig = domain_risk(domain)
         w_score, w_sig = whois_risk(domain)
+        trust, trust_sig = trust_score(domain)
+        url_signals.extend(trust_sig)
 
         url_score += d_score + w_score
         url_signals.extend(d_sig)
         whois_signals.extend(w_sig)
 
     url_norm = clamp(url_score / MAX_URL_SCORE) if urls else 0.0
+    
+    # =========================
+    # DNS FINAL CHECK (UN SOLO PUNTO DE VERDAD)
+    # =========================
 
+    dns_fail = False
+    dns_signal = []
+
+    for url in urls:
+        domain = extract_domain(url)
+
+        if domain and not domain_resolves(domain):
+            dns_fail = True
+            dns_signal.append("domain_non_existent")
+
+    if dns_fail:
+        url_norm = min(1.0, url_norm + 0.5)
+        url_signals.append("domain_unresolvable")
+
+    
 
     # =========================
     # ML SCORE
@@ -441,9 +698,44 @@ def analyze_text(text: str):
     for intent, proto in emb.items():
         sim = util.cos_sim(embedding, proto).item()
         sim = max(0, sim)
+        
+        print(intent, round(sim, 3))
 
-        if sim > SIM_THRESHOLD:
+        thresholds = {
+            "impersonation": 0.40,
+            "credentials": 0.30,
+            "threats": 0.35,
+            "urgency": 0.25,
+            "reward": 0.35,
+            "suspicious_link": 0.30,
+            "benign_security": 0.45
+        }
+
+        if sim > thresholds[intent]:
             semantic_hits.append(SIGNAL_MAP[intent])
+            
+        # HARD RULES (SOC OVERRIDE)
+    text_lower = text.lower()
+
+    if intent == "urgency":
+        if any(x in text_lower for x in [
+            "verifique inmediatamente",
+            "acción inmediata",
+            "último aviso",
+            "actúe ahora",
+            "urgente"
+        ]):
+            semantic_hits.append("urgency")
+
+    if intent == "credentials":
+        if any(x in text_lower for x in [
+            "verifique su cuenta",
+            "confirmar identidad",
+            "introduzca su contraseña",
+            "paypal",
+            "login"
+        ]):
+            semantic_hits.append("credentials")
 
         if intent == "benign_security":
             benign_score += abs(WEIGHTS[intent]) * sim
@@ -459,7 +751,11 @@ def analyze_text(text: str):
     # SIGNALS
     # =========================
 
-    all_signals = set(semantic_hits + url_signals + whois_signals)
+    all_signals = set(
+    semantic_hits +
+    url_signals +
+    whois_signals
+)
 
     identity_hits = len(all_signals & identity_signals)
     behavior_hits = len(all_signals & behavior_signals)
@@ -474,59 +770,103 @@ def analyze_text(text: str):
 
     rule_score = clamp(len(rules_triggered) / 5)
 
+    conf_score, conf_signals = confidence_score(
+    semantic_hits,
+    url_signals,
+    whois_signals,
+    rules_triggered
+)
+
 
     # =========================
-    # ATTACK PATTERN SCORE (SIN OVERBOOST)
-    # =========================
+# ATTACK PATTERN SCORE
+# =========================
 
     attack_chain_score = 0.10 if (identity_hits >= 1 and behavior_hits >= 2) else 0.0
 
-    phishing_confidence = 0.0
+
+    # =========================
+    # CRITICAL LAYER (UNIFICADO)
+    # =========================
+
+    critical_layer = 0.0
 
     if "brand_impersonation" in all_signals:
-        phishing_confidence += 0.15
-    if "credentials" in all_signals:
-        phishing_confidence += 0.20
-    if "suspicious_link" in all_signals:
-        phishing_confidence += 0.10
-    if "very_new_domain" in all_signals:
-        phishing_confidence += 0.10
-
-    phishing_confidence = clamp(phishing_confidence / 0.55)
-
-
-    # =========================
-    # CRITICAL PATTERN (NO OVERRIDE)
-    # =========================
-
-    critical_pattern = 0.0
+        critical_layer += 0.25
 
     if "credentials" in all_signals:
-        critical_pattern += 0.20
+        critical_layer += 0.25
+
     if "urgency" in all_signals:
-        critical_pattern += 0.20
-    if "brand_impersonation" in all_signals:
-        critical_pattern += 0.20
+        critical_layer += 0.15
 
-    critical_pattern = clamp(critical_pattern)
+    if "phishing_keywords" in all_signals:
+        critical_layer += 0.10
 
+    if "very_new_domain" in all_signals:
+        critical_layer += 0.10
 
+    critical_layer = clamp(critical_layer)
+
+        
     # =========================
     # FINAL SCORE (CALIBRADO REAL)
     # =========================
 
     raw_risk = (
-        ml_norm * 0.30 +
-        url_norm * 0.20 +
-        rule_score * 0.15 +
-        attack_chain_score * 0.10 +
-        phishing_confidence * 0.15 +
-        critical_pattern * 0.10
-    )
+    url_norm * 0.30 +
+    rule_score * 0.20 +
+    critical_layer * 0.35 +
+    ml_norm * 0.15
+)
+    
+    # =========================
+# SOC CRITICAL OVERRIDE LAYER
+# =========================
 
-    raw_risk = min(1.0, raw_risk * 1.15)
+    if "brand_impersonation" in all_signals:
+        raw_risk += 0.10
 
-    score = int(clamp(raw_risk) ** 0.7 * 100)
+    if "credentials" in all_signals:
+        raw_risk += 0.15
+
+    if "suspicious_link" in all_signals:
+        raw_risk += 0.10
+
+    if "threats" in all_signals:
+        raw_risk += 0.10
+
+    # CAP FINAL
+    raw_risk = min(1.0, raw_risk)
+
+# OVERRIDE SOC REAL
+    if dns_fail:
+        raw_risk = max(raw_risk, 0.65)
+
+    # =========================
+    # FIX INCERTIDUMBRE
+    # =========================
+
+    confidence_adjust = 0.0
+
+    if urls:
+        confidence_adjust += 0.05
+
+    if len(semantic_hits) == 0:
+        confidence_adjust += 0.05
+
+    if len(whois_signals) == 0:
+        confidence_adjust += 0.05
+
+    raw_risk = clamp(raw_risk + confidence_adjust)
+
+
+    # =========================
+    # SCORE FINAL
+    # =========================
+
+    score = int(raw_risk * 100)
+    score = max(0, min(score, 100))
 
 
     # =========================
@@ -537,14 +877,96 @@ def analyze_text(text: str):
 
     level = percentile_bin(score, RISK_HISTORY)
     ui = UI_MAP[level]
+    
+    
+    # =========================
+    # NORMALIZACIÓN PARA LLM
+    # =========================
+
+    level_map = {
+        "green": "safe",
+        "blue": "low",
+        "yellow": "medium",
+        "orange": "high",
+        "red": "critical"
+    }
+
+    level = level_map.get(level, level)
 
 
     # =========================
-    # OUTPUT
+    # CONFIDENCE (UNA SOLA VEZ)
     # =========================
 
-    intention, techniques = build_text_analysis(all_signals)
-    domain, url_problem = build_url_analysis(main_domain, all_signals)
+    confidence, confidence_signals = confidence_score(
+        semantic_hits,
+        url_signals,
+        whois_signals,
+        rules_triggered
+    )
+
+
+    # =========================
+    # CONTEXT (LLM)
+    # =========================
+
+    context = build_context(
+        text=text,
+        score=score,
+        level=level,
+        domain=main_domain,
+        signals=all_signals,
+        ml_score=ml_norm,
+        url_score=url_norm,
+        rules=len(rules_triggered)
+    )
+    
+    llm_context = {
+    "risk": {
+        "level": level,
+        "score": score
+    },
+    "signals": list(all_signals),
+    "engine": {
+        "ml_score": ml_norm,
+        "url_score": url_norm,
+        "rules": len(rules_triggered)
+    }
+}
+
+    llm_reasoning = generate_reasoning(llm_context)
+
+
+    # =========================
+    # OUTPUT ANALYSIS BLOCKS
+    # =========================
+
+    intention, analysis = build_text_analysis(all_signals)
+
+    domain, url_problem = build_url_analysis(main_domain, url_signals)
+
+    attack_chain = build_attack_chain(list(all_signals))
+    evidence = build_evidence(list(all_signals))
+
+    # =========================
+    # REASONING (LLM)
+    # =========================
+
+    reasoning = build_reasoning(
+        score=score,
+        level=level,
+        signals=all_signals,
+        analysis=context,
+    )
+
+    reasoning["why_this_score"] = llm_reasoning["why_this_score"]
+
+
+    print("SIGNALS:", all_signals)
+    print("SCORE:", score)
+    # =========================
+    # RETURN FINAL RESPONSE
+    # =========================
 
     return {
         "verdict": {
@@ -559,12 +981,12 @@ def analyze_text(text: str):
             )
         },
 
-        "executive_summary": build_summary(score),
+        "executive_summary": llm_reasoning["executive_summary"],
 
         "analysis": {
             "text": {
                 "intention": intention,
-                "tecnicas": techniques
+                "analysis": analysis
             },
             "url": {
                 "dominio": domain,
@@ -574,19 +996,10 @@ def analyze_text(text: str):
 
         "reasoning": {
             "summary": build_summary(score),
-            "key_factors": list(all_signals)[:10],
-            "why_this_score": [
-                f"ML: {ml_norm:.2f}",
-                f"URL: {url_norm:.2f}",
-                f"Rules: {len(rules_triggered)}",
-                f"Attack: {attack_chain_score:.2f}",
-                f"Phishing: {phishing_confidence:.2f}",
-                f"Critical pattern: {critical_pattern:.2f}"
-            ]
+            "why_this_score": reasoning["why_this_score"]
         },
 
-        "cadena_ataque": build_attack_chain(all_signals),
-        "evidencias": build_evidence(all_signals),
+        "cadena_ataque": attack_chain,
+        "evidencias": evidence,
         "signals": list(all_signals)
     }
-

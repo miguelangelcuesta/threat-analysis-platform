@@ -56,6 +56,7 @@ console.log("SCORE:", result?.verdict?.score);
 
   return (
   <div style={styles.layout}>
+    
 
     {/* SIDEBAR */}
     <div style={styles.sidebar}>
@@ -151,27 +152,26 @@ console.log("SCORE:", result?.verdict?.score);
 
             <div style={styles.panel}>
               <h4 style={{ ...styles.panelTitle, color: ui.color }}>
+               
                 ANÁLISIS DEL TEXTO
               </h4>
 
 
-              <p><b>Intención:</b> {result.analysis?.text?.intention}</p>
+              <p>
+                 {result.analysis?.text?.analysis}
+              </p>
 
-              <p><b>Técnicas:</b></p>
-              <ul>
-                {(result.analysis?.text?.tecnicas || []).map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ul>
+            
             </div>
 
             <div style={styles.panel}>
               <h4 style={{ ...styles.panelTitle, color: ui.color }}>
+                
                 ANÁLISIS DE URL
               </h4>
 
 
-              <p><b>Dominio:</b> {result.analysis?.url?.dominio}</p>
+              <p><b>Dominio:</b> {result.analysis?.url?.dominio || "No detectado"}</p>
               <p>{result.analysis?.url?.problema}</p>
             </div>
 
