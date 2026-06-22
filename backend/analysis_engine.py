@@ -1,3 +1,4 @@
+import os 
 from collections import deque
 
 from sentence_transformers import SentenceTransformer
@@ -40,6 +41,7 @@ INTENT_EMB = None
 
 MAX_URL_SCORE = 100
 MAX_ML_SCORE = 120
+USE_ML = os.getenv("USE_ML", "true").lower() == "true"
 
 #  historial para calibración
 RISK_HISTORY = deque(maxlen=500)
@@ -50,8 +52,13 @@ RISK_HISTORY = deque(maxlen=500)
 
 def get_model():
     global _model
+
+    if not USE_ML:
+        return None
+
     if _model is None:
         _model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+
     return _model
 
 
@@ -98,8 +105,11 @@ def analyze_text(text: str):
     model = get_model()
     text = text or ""
 
-    embedding = model.encode(text, convert_to_tensor=True)
+    embedding = None
 
+    if USE_ML and model is not None:
+        embedding = model.encode(text, convert_to_tensor=True)
+        
     url_signals = []
     whois_signals = []
 
@@ -148,19 +158,27 @@ def analyze_text(text: str):
     # ML SCORE
     # =========================
 
-    emb = get_embeddings(model, INTENT_EMB)
+    if USE_ML and model is not None and embedding is not None:
+        emb = get_embeddings(model, INTENT_EMB)
 
-    semantic_hits, ml_score, benign_score, similarity_debug = analyze_semantics(
-        text=text,
-        embedding=embedding,
-        embeddings=emb
-    )
+        semantic_hits, ml_score, benign_score, similarity_debug = analyze_semantics(
+            text=text,
+            embedding=embedding,
+            embeddings=emb
+        )
 
-    INTENT_EMB = emb
+        INTENT_EMB = emb
 
-    ml_norm = ml_score / MAX_ML_SCORE
-    ml_norm = ml_norm - (benign_score / MAX_ML_SCORE)
-    ml_norm = clamp(ml_norm)
+        ml_norm = ml_score / MAX_ML_SCORE
+        ml_norm = ml_norm - (benign_score / MAX_ML_SCORE)
+        ml_norm = clamp(ml_norm)
+
+    else:
+        semantic_hits = []
+        ml_score = 0
+        benign_score = 0
+        similarity_debug = {}
+        ml_norm = 0.0
 
     # =========================
     # SIGNALS
