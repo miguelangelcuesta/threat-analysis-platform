@@ -1,171 +1,274 @@
 # Anti-Scam Detector
 
-## Security Intelligence Platform for Phishing Detection
+## Plataforma de Inteligencia de Seguridad para Detección de Phishing
 
-Motor de análisis híbrido desarrollado para detectar campañas de phishing mediante la correlación de señales semánticas, infraestructura de dominio y reglas de comportamiento.
-
-El sistema combina:
-
-* NLP basado en Sentence Transformers.
-* Análisis DNS y WHOIS.
-* Detección de suplantación de identidad.
-* Correlación de señales mediante reglas SOC.
-* Motor explicable de toma de decisiones.
-* API REST desarrollada con FastAPI.
-* Interfaz web desarrollada con React.
+Motor de análisis híbrido desarrollado para detectar campañas de phishing mediante la correlación de señales semánticas, análisis de infraestructura y reglas de comportamiento inspiradas en procesos SOC.
 
 El objetivo no es únicamente clasificar amenazas, sino proporcionar evidencia y razonamiento que permitan justificar cada decisión de seguridad.
 
+---
 
-**Producto de decisión para combatir phishing y estafas**: convierte señales de un mensaje y/o enlace en una **acción recomendada** (bloquear, revisar o monitorizar) con **explicación y evidencia**.
+# Capturas de funcionamiento
 
-Diseñado para equipos que no pueden permitirse “mirar y pensar”: necesitan **responder rápido** y justificar por qué.
+## Contenido legítimo
+
+![Safe Analysis](docs/images/safe.png)
+
+## Riesgo por infraestructura de dominio
+
+![DNS Risk](docs/images/dns-risk.png)
+
+## Detección de suplantación de identidad
+
+![Critical Detection](docs/images/critical.png)
+
+## Escenario completo de phishing
+
+![Full Phishing](docs/images/full-phishing.png)
 
 ---
 
-## El problema (en lenguaje de negocio)
-Los intentos de phishing no se notan a simple vista: combinan redacción convincente, urgencia emocional y enlaces que aparentan legitimidad. Cuanto más tarde el triage, mayor es el impacto (fraude, credenciales comprometidas, interrupción operativa).
+# El problema
+
+Los ataques de phishing modernos rara vez dependen de un único indicador.
+
+Las campañas actuales combinan:
+
+* Suplantación de identidad.
+* Robo de credenciales.
+* Ingeniería social.
+* Mensajes de urgencia.
+* Dominios sospechosos.
+* Infraestructura desechable.
+
+Muchas soluciones generan una puntuación de riesgo, pero no explican claramente por qué una amenaza ha sido clasificada como peligrosa.
 
 ---
 
-## La solución
+# La solución
 
-### Arquitectura de análisis
+Anti-Scam Detector analiza texto y URLs mediante múltiples capas independientes y correlaciona todas las evidencias para producir una evaluación de riesgo explicable.
 
-## Tecnologías utilizadas
+El resultado final incluye:
 
-### Backend
+* Puntuación de riesgo.
+* Clasificación de amenaza.
+* Evidencias detectadas.
+* Explicación comprensible.
+* Acción recomendada.
+
+---
+
+# Arquitectura de análisis
+
+```text
+Usuario
+    │
+    ▼
+ FastAPI API
+    │
+    ├── Semantic Engine
+    │      └── Sentence Transformers
+    │
+    ├── Infrastructure Engine
+    │      ├── DNS Analysis
+    │      └── WHOIS Analysis
+    │
+    ├── SOC Correlation Engine
+    │
+    ├── Risk Scoring Engine
+    │
+    └── Explainability Engine
+             │
+             ▼
+      Evaluación Final
+```
+
+---
+
+# Arquitectura del proyecto
+
+```text
+backend/
+│
+├── engines/
+│   ├── semantic_engine.py
+│   ├── infrastructure_engine.py
+│   ├── explainability_engine.py
+│   ├── scoring_utils.py
+│   └── url_utils.py
+│
+├── analysis_engine.py
+├── reasoning_engine.py
+├── llm_engine.py
+├── context_builder.py
+└── server.py
+```
+
+---
+
+# Tecnologías utilizadas
+
+## Backend
 
 * Python 3.11
 * FastAPI
-* Sentence Transformers
+* Uvicorn
 * NumPy
 * Python-WHOIS
 
-### Machine Learning / NLP
+## Inteligencia Artificial y NLP
 
+* Sentence Transformers
 * paraphrase-multilingual-MiniLM-L12-v2
 * Semantic Similarity
-* Embedding-based Classification
+* Embedding-Based Classification
 
-### Security Analysis
+## Seguridad
 
 * DNS Resolution
 * WHOIS Analysis
-* Domain Reputation Signals
+* Brand Impersonation Detection
+* Infrastructure Validation
 * SOC Correlation Rules
 
-### Frontend
+## Frontend
 
 * React
 * JavaScript
 * CSS
 
-### Deployment
+## Despliegue
 
-* Render
 * GitHub
-
-
-El motor procesa cada entrada mediante varias capas independientes:
-
-1. **Semantic Detection Layer**
-
-   * Sentence Transformers (paraphrase-multilingual-MiniLM-L12-v2)
-   * Detección de patrones compatibles con phishing, ingeniería social y robo de credenciales.
-
-2. **Infrastructure Analysis Layer**
-
-   * Resolución DNS.
-   * Análisis WHOIS.
-   * Evaluación de antigüedad y características del dominio.
-
-3. **SOC Correlation Layer**
-
-   * Correlación entre señales de identidad, comportamiento e infraestructura.
-   * Aplicación de reglas de detección inspiradas en procesos SOC.
-
-4. **Risk Scoring Engine**
-
-   * Normalización de señales.
-   * Agregación de evidencias.
-   * Clasificación en cinco niveles de riesgo.
-
-5. **Explainability Layer**
-
-   * Generación de evidencias.
-   * Construcción de razonamientos explicables.
-   * Recomendación de acción para el usuario o analista.
-
-Anti-Scam Detector evalúa un input y devuelve un paquete listo para UI/operación:
-
-- **`verdict.score` (0..100)**: nivel de riesgo cuantificado.
-- **`verdict.level`**: `safe | low | medium | high | critical`.
-- **`verdict.action`**: recomendación accionable.
-- **Explicación**: factores dominantes + evidencia.
-- **`cadena_ataque`**: resumen de los pasos típicos del intento.
+* Render
 
 ---
 
-## ¿Para quién es?
-- **SOC / Ciberseguridad**: triage más rápido, priorización de alertas y explicación para auditoría.
-- **Operaciones y Soporte**: detección temprana para reducir caídas antes de que ocurran.
-- **Equipos de Riesgo / Compliance**: justificación reproducible de la decisión.
+# Pipeline de detección
+
+## 1. Semantic Detection Layer
+
+Detecta patrones relacionados con:
+
+* Robo de credenciales.
+* Suplantación de identidad.
+* Ingeniería social.
+* Urgencia.
+* Amenazas.
+* Enlaces sospechosos.
+
+## 2. Infrastructure Analysis Layer
+
+Analiza:
+
+* Resolución DNS.
+* Información WHOIS.
+* Características estructurales del dominio.
+* Indicadores de confianza.
+
+## 3. SOC Correlation Layer
+
+Correlaciona señales de identidad, comportamiento e infraestructura utilizando reglas inspiradas en centros de operaciones de seguridad (SOC).
+
+## 4. Risk Scoring Engine
+
+Normaliza todas las evidencias y genera una puntuación final entre 0 y 100.
+
+## 5. Explainability Layer
+
+Genera:
+
+* Resumen ejecutivo.
+* Justificación del riesgo.
+* Evidencias detectadas.
+* Acción recomendada.
 
 ---
 
-## Diferenciadores
-- **Decisión con evidencia**, no solo “score”.
-- **Explicable y consistente**: misma lógica para texto y enlaces.
-- **Enfoque híbrido**: señales de lenguaje + señales del dominio/enlace + reglas de correlación.
-- **Estabilización del binning** mediante historial para evitar saltos erráticos.
+# Casos de ejemplo
+
+## Sitio legítimo
+
+```text
+https://www.mundodeportivo.com
+
+Score: 13/100
+Clasificación: Sin indicadores relevantes
+Acción: Sin acción necesaria
+```
+
+## Dominio inexistente
+
+```text
+www.terrobo.com
+
+Score: 75/100
+Clasificación: Riesgo crítico
+Acción: Bloquear inmediatamente
+```
+
+## Suplantación de identidad
+
+```text
+paypal-secure-login.com
+
+Score: 93/100
+Clasificación: Riesgo crítico
+Acción: Bloquear inmediatamente
+```
+
+## Intento completo de phishing
+
+```text
+Su cuenta PayPal será suspendida.
+Verifique inmediatamente en paypal-secure-login.com
+
+Score: 93+/100
+Clasificación: Riesgo crítico
+Acción: Bloquear inmediatamente
+```
 
 ---
 
-## Experiencia de uso (workflow)
-1. El usuario/analista pega un mensaje o captura un enlace.
-2. La UI muestra un **traffic light** y una **acción sugerida**.
-3. El equipo ejecuta el paso recomendado.
-4. El resultado incluye “**por qué**” y “**qué señales**” para mejorar el proceso y el aprendizaje.
+# API
 
----
+## POST /api/analyze
 
-## Cómo integrarlo (API)
-### `POST /api/analyze`
-**Body (JSON)** (campos opcionales):
-- `text`: texto a evaluar
-- `url`: enlace a evaluar
-- `input_type`: `text` o `url` (por defecto `text`)
+### Solicitud
 
-**Ejemplo**:
 ```json
 {
-  "text": "Verifica tu cuenta inmediatamente y accede ahora.",
-  "url": null,
+  "text": "Verifique inmediatamente su cuenta",
   "input_type": "text"
 }
 ```
 
-**Salida**: JSON con `verdict`, `executive_summary`, `analysis` y evidencias.
+### Respuesta
 
----
-
-## Roadmap (lo que haríamos para convertirlo en versión “enterprise-ready”)
-- Persistencia real de historial y calibración por dispositivo/usuario.
-- Métricas de desempeño por categoría (precisión, recall, FPR) y tuning continuo.
-- Ampliar cobertura de señales del dominio (patrones adicionales, infraestructura, ASN/TLD, etc.).
-- Panel de analista: trending, justificación, y exportación para auditoría.
-
----
-
-## Requisitos y ejecución rápida
-### Backend
-```bash
-pip install -r requirements.txt
-.venv\\Scripts\\uvicorn backend.server:app --reload --port 8000
+```json
+{
+  "verdict": {},
+  "executive_summary": "",
+  "analysis": {},
+  "reasoning": {},
+  "signals": []
+}
 ```
 
-### Frontend
+---
+
+# Instalación local
+
+## Backend
+
+```bash
+pip install -r requirements.txt
+uvicorn backend.server:app --reload --port 8000
+```
+
+## Frontend
+
 ```bash
 cd frontend
 npm install
@@ -174,11 +277,29 @@ npm start
 
 ---
 
-## Nota de confianza
-El motor es **orientativo**: no sustituye controles de seguridad ni verificación externa. Está optimizado para ayudar a equipos a tomar decisiones consistentes y rápidas.
+# Roadmap
+
+* Integración de fuentes de inteligencia de amenazas.
+* Análisis de reputación de dominios.
+* Análisis ASN e infraestructura.
+* Dashboard para analistas.
+* Métricas de precisión y rendimiento.
+* Visualización de tendencias de amenazas.
 
 ---
 
-## Contacto
-Miguel Ángel Cuesta
+# Aviso
 
+Esta herramienta tiene fines educativos, de investigación y defensa.
+
+Su objetivo es ayudar en la evaluación del riesgo y la detección de phishing, pero no sustituye controles profesionales de seguridad ni procesos de validación adicionales.
+
+---
+
+# Autor
+
+**Miguel Ángel Cuesta**
+
+Máster en Ciberseguridad
+
+GitHub: https://github.com/miguelangelcuesta
