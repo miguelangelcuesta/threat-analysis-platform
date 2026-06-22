@@ -46,6 +46,7 @@ def domain_risk(domain):
 
     if any(brand in domain for brand in brands):
         signals.append("credentials")
+        score += 15
 
     if len(domain) > 30:
         score += 10

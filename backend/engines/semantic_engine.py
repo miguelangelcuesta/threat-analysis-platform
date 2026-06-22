@@ -1,4 +1,3 @@
-from sentence_transformers import util
 
 
 INTENTS = {
@@ -120,6 +119,8 @@ def get_embeddings(model, intent_cache):
 
 
 def analyze_semantics(text, embedding, embeddings):
+    from sentence_transformers import util
+    
     semantic_hits = []
     ml_score = 0
     benign_score = 0
