@@ -40,8 +40,12 @@ def domain_risk(domain):
             signals.append("brand_impersonation")
 
     if any(k in domain for k in ["login", "secure", "verify", "account"]):
-        score += 15
+        score += 25
         signals.append("phishing_keywords")
+        signals.append("suspicious_link")
+
+    if any(brand in domain for brand in brands):
+        signals.append("credentials")
 
     if len(domain) > 30:
         score += 10
