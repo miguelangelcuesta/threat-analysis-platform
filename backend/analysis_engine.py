@@ -1,23 +1,14 @@
-import re
-import math
-import numpy as np
-import random
-import socket
 from collections import deque
-from datetime import datetime, date
-from urllib.parse import urlparse
-from backend.engines.url_utils import extract_urls, extract_domain, domain_resolves
+
 from sentence_transformers import SentenceTransformer, util
+
 from backend.soc.soc_rules import evaluate_rules
 from backend.reasoning_engine import build_reasoning
 from backend.context_builder import build_context
 from backend.llm_engine import generate_reasoning
-from datetime import datetime, date
-from backend.engines.scoring_utils import (
-    clamp,
-    get_risk_bin,
-    percentile_bin
-)
+
+from backend.engines.url_utils import extract_urls, extract_domain, domain_resolves
+from backend.engines.scoring_utils import clamp, percentile_bin
 from backend.engines.explainability_engine import (
     build_text_analysis,
     build_url_analysis,
@@ -25,7 +16,12 @@ from backend.engines.explainability_engine import (
     build_evidence,
     build_summary
 )
-
+from backend.engines.infrastructure_engine import (
+    domain_risk,
+    whois_risk,
+    trust_score,
+    confidence_score
+)
 
 # =========================
 # CONFIG
@@ -42,7 +38,6 @@ MAX_ML_SCORE = 120
 #  historial para calibración
 RISK_HISTORY = deque(maxlen=500)
 
-
 # =========================
 # MODEL
 # =========================
@@ -53,11 +48,9 @@ def get_model():
         _model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     return _model
 
-
 # =========================
 # INTENTS
 # =========================
-
 
 INTENTS = {
 
@@ -152,7 +145,6 @@ infra_signals = {
     "long_domain"
 }
 
-
 # =========================
 # UI MAP (SINGLE SOURCE OF TRUTH)
 # =========================
@@ -185,182 +177,6 @@ UI_MAP = {
     }
 }
 
-
-def domain_risk(domain):
-    score = 0
-    signals = []
-
-    if not domain:
-        return 0, ["empty_domain"]
-
-    TRUSTED_DOMAINS = {
-        "msn.com",
-        "google.com",
-        "microsoft.com",
-        "amazon.com",
-        "apple.com",
-        "paypal.com",
-        "mundodeportivo.com"
-    }
-
-    # =========================
-    # TRUST LAYER (NO RISK)
-    # =========================
-    if domain in TRUSTED_DOMAINS:
-        signals.append("trusted_domain")
-    else:
-        signals.append("unknown_domain")
-        score += 8
-    # =========================
-# DNS / EXISTENCIA REAL
-# =========================
-
-    if not domain_resolves(domain):
-        signals.append("domain_unresolvable")
-        signals.append("domain_non_existent")
-
-        # esto ya NO es "10 puntos"
-        # es un comportamiento crítico en phishing real
-        score += 35
-    # =========================
-    # BRAND IMPERSONATION (ALTO IMPACTO)
-    # =========================
-    brands = ["paypal", "google", "amazon", "apple", "microsoft"]
-
-    if any(b in domain for b in brands):
-        if domain not in TRUSTED_DOMAINS:
-            score += 40
-            signals.append("brand_impersonation")
-
-    # =========================
-    # PHISHING KEYWORDS
-    # =========================
-    if any(k in domain for k in ["login", "secure", "verify", "account"]):
-        score += 15
-        signals.append("phishing_keywords")
-
-    # =========================
-    # OBFUSCATION
-    # =========================
-    if len(domain) > 30:
-        score += 10
-        signals.append("long_domain")
-
-    return score, signals
-
-# =========================
-# WHOIS
-# =========================
-
-def whois_risk(domain):
-    score = 0
-    signals = []
-
-    try:
-        import whois
-        w = whois.whois(domain)
-        creation = w.creation_date
-
-        if not creation:
-            return 10, ["no_whois_data"]
-
-        if isinstance(creation, list):
-            creation = creation[0]
-
-        if isinstance(creation, date):
-            creation = datetime.combine(creation, datetime.min.time())
-
-        age_days = (datetime.now() - creation).days
-
-        # =========================
-        # VERY NEW DOMAIN (ALTO RIESGO)
-        # =========================
-        if age_days < 30:
-            score += 25
-            signals.append("very_new_domain")
-
-        # =========================
-        # RECENT DOMAIN (RIESGO MEDIO)
-        # =========================
-        elif age_days < 180:
-            score += 10
-            signals.append("recent_domain")
-
-        # =========================
-        # ESTABLE (SIN RIESGO)
-        # =========================
-        else:
-            signals.append("established_domain")
-
-    except Exception:
-        return 10, ["whois_lookup_failed"]
-
-    return score, signals
-
-def confidence_score(semantic_hits, url_signals, whois_signals, rules_triggered):
-    score = 1.0
-    signals = []
-
-    if len(semantic_hits) == 0:
-        score -= 0.25
-        signals.append("no_semantic_evidence")
-
-    if len(url_signals) == 0:
-        score -= 0.15
-        signals.append("no_url_evidence")
-
-    if len(whois_signals) == 0:
-        score -= 0.10
-        signals.append("no_whois_evidence")
-
-    if len(rules_triggered) == 0:
-        score -= 0.15
-        signals.append("no_rule_evidence")
-
-    if len(semantic_hits) > 0 and len(url_signals) == 0:
-        score -= 0.10
-        signals.append("signal_mismatch")
-
-    score = max(0.0, min(1.0, score))
-
-    return score, signals
-
-def trust_score(domain):
-    signals = []
-
-    if not domain:
-        return 0.5, ["no_domain"]
-
-    TRUSTED_DOMAINS = {
-        "msn.com",
-        "google.com",
-        "microsoft.com",
-        "amazon.com",
-        "apple.com",
-        "paypal.com",
-        "mundodeportivo.com"
-    }
-
-    if domain in TRUSTED_DOMAINS:
-        return 1.0, ["trusted_domain"]
-
-    score = 0.5
-
-    if domain.endswith((".com", ".es", ".org", ".net")):
-        score += 0.2
-        signals.append("standard_tld")
-
-    if domain.count(".") > 2:
-        score -= 0.2
-        signals.append("many_subdomains")
-
-    if any(k in domain for k in ["login", "secure", "verify", "account"]):
-        score -= 0.3
-        signals.append("suspicious_keywords")
-
-    score = max(0.0, min(1.0, score))
-
-    return score, signals
 
 # =========================
 # EMBEDDINGS
@@ -453,7 +269,7 @@ def analyze_text(text: str):
             "credentials": 0.30,
             "threats": 0.35,
             "urgency": 0.45,
-            "reward": 0.35,
+            "reward": 0.50,
             "suspicious_link": 0.30,
             "benign_security": 0.45
         }
