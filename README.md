@@ -276,6 +276,73 @@ npm start
 ```
 
 ---
+## Deployment Modes
+
+Anti-Scam Detector soporta dos modos de ejecución distintos según el entorno donde se despliega.
+
+### Public Demo Mode (Render Free)
+
+La versión pública desplegada utiliza un motor optimizado para entornos con recursos limitados.
+
+Características:
+
+* Correlación de señales SOC.
+* Detección de suplantación de identidad.
+* Análisis DNS.
+* Análisis WHOIS.
+* Risk Scoring Engine.
+* Explainability Engine.
+* Recomendación de acción.
+
+Configuración:
+
+```env
+USE_ML=false
+```
+
+Este modo se utiliza exclusivamente para garantizar estabilidad y disponibilidad en infraestructuras gratuitas con limitaciones de memoria.
+
+---
+
+### Full NLP Mode (Local Development)
+
+La versión completa incorpora análisis semántico mediante Sentence Transformers.
+
+Características adicionales:
+
+* Semantic Similarity.
+* Intent Detection.
+* Embedding-Based Classification.
+* NLP Correlation Layer.
+
+Configuración:
+
+```env
+USE_ML=true
+```
+
+Modelo utilizado:
+
+```text
+sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+---
+
+### Engineering Decision
+
+La separación entre ambos modos responde exclusivamente a restricciones de infraestructura del entorno gratuito de despliegue.
+
+La arquitectura ha sido diseñada mediante Feature Flags para permitir activar o desactivar la capa NLP sin modificar el resto del motor de análisis.
+
+De esta forma el sistema mantiene:
+
+* La misma arquitectura.
+* El mismo motor de correlación.
+* El mismo sistema de scoring.
+* El mismo motor explicable.
+
+Garantizando una experiencia estable tanto en entornos de demostración como en despliegues completos.
 
 # Roadmap
 
