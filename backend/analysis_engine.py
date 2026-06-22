@@ -1,6 +1,6 @@
 from collections import deque
 
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
 
 from backend.soc.soc_rules import evaluate_rules
 from backend.reasoning_engine import build_reasoning
@@ -23,8 +23,6 @@ from backend.engines.infrastructure_engine import (
     confidence_score
 )
 from backend.engines.semantic_engine import (
-    WEIGHTS,
-    SIGNAL_MAP,
     identity_signals,
     behavior_signals,
     infra_signals,
@@ -39,7 +37,6 @@ from backend.engines.semantic_engine import (
 _model = None
 INTENT_EMB = None
 
-SIM_THRESHOLD = 0.30
 
 MAX_URL_SCORE = 100
 MAX_ML_SCORE = 120
@@ -103,7 +100,6 @@ def analyze_text(text: str):
 
     embedding = model.encode(text, convert_to_tensor=True)
 
-    semantic_hits = []
     url_signals = []
     whois_signals = []
 
@@ -136,14 +132,13 @@ def analyze_text(text: str):
     # =========================
 
     dns_fail = False
-    dns_signal = []
-
+    
     for url in urls:
         domain = extract_domain(url)
 
         if domain and not domain_resolves(domain):
             dns_fail = True
-            dns_signal.append("domain_non_existent")
+            
 
     if dns_fail:
         url_norm = min(1.0, url_norm + 0.5)
@@ -368,9 +363,7 @@ def analyze_text(text: str):
 
     reasoning["why_this_score"] = llm_reasoning["why_this_score"]
 
-    print("SIGNALS:", all_signals)
-    print("SCORE:", score)
-    
+
     # =========================
     # RETURN FINAL RESPONSE
     # =========================
