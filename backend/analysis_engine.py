@@ -22,6 +22,15 @@ from backend.engines.infrastructure_engine import (
     trust_score,
     confidence_score
 )
+from backend.engines.semantic_engine import (
+    WEIGHTS,
+    SIGNAL_MAP,
+    identity_signals,
+    behavior_signals,
+    infra_signals,
+    get_embeddings,
+    analyze_semantics
+)
 
 # =========================
 # CONFIG
@@ -48,102 +57,6 @@ def get_model():
         _model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     return _model
 
-# =========================
-# INTENTS
-# =========================
-
-INTENTS = {
-
-    "impersonation": """
-paypal microsoft google amazon apple banco soporte seguridad cuenta verificación
-equipo de seguridad verificación de identidad alerta de seguridad acceso seguro
-""",
-
-    "credentials": """
-contraseña iniciar sesión credenciales acceso usuario autenticación pin código
-introduce tu contraseña verifica tu cuenta banco login acceso seguro
-
-verifique su cuenta
-confirme su cuenta
-actualice sus datos
-actualice la información
-validar identidad
-confirmar identidad
-confirmar acceso
-datos de acceso
-credenciales de acceso
-""",
-
-    "threats": """
-cuenta suspendida bloqueada desactivada restringida acceso denegado
-alerta de seguridad advertencia final eliminación permanente cuenta comprometida
-""",
-    "urgency": """
-urgente inmediatamente ahora acción requerida tiempo limitado última advertencia
-actúa ya responde hoy en minutos respuesta inmediata
-
-verifique inmediatamente
-verifica ahora
-actúe inmediatamente
-acción urgente requerida
-requiere atención inmediata
-debe actuar ahora
-evite la suspensión
-último aviso
-última oportunidad
-""",
-
-    "reward": """
-premio regalo recompensa lotería bono dinero gratis cashback ganaste
-has ganado reclama tu premio oferta exclusiva
-""",
-
-    "suspicious_link": """
-haz clic en el enlace inicia sesión verifica acceso seguro portal
-actualiza tu cuenta confirma identidad página de inicio sesión enlace seguro
-""",
-
-    "benign_security": """
-formación en seguridad buenas prácticas documentación interna políticas de empresa
-concienciación seguridad procedimientos corporativos ciberseguridad educación
-"""
-}
-
-
-WEIGHTS = {
-    "impersonation": 25,
-    "credentials": 30,
-    "threats": 25,
-    "urgency": 20,
-    "reward": 15,
-    "suspicious_link": 25,
-    "benign_security": -30
-}
-
-SIGNAL_MAP = {
-    "impersonation": "brand_impersonation",
-    "credentials": "credentials",
-    "threats": "threats",
-    "urgency": "urgency",
-    "reward": "reward",
-    "suspicious_link": "suspicious_link",
-    "benign_security": "benign_security"
-}
-
-identity_signals = {"brand_impersonation"}
-behavior_signals = {
-    "credentials",
-    "threats",
-    "urgency",
-    "reward",
-    "suspicious_link"
-}
-
-infra_signals = {
-    "very_new_domain",
-    "recent_domain",
-    "long_domain"
-}
 
 # =========================
 # UI MAP (SINGLE SOURCE OF TRUTH)
@@ -177,27 +90,14 @@ UI_MAP = {
     }
 }
 
-
-# =========================
-# EMBEDDINGS
-# =========================
-
-def get_embeddings(model):
-    global INTENT_EMB
-
-    if INTENT_EMB is None:
-        INTENT_EMB = {
-            k: model.encode(v, convert_to_tensor=True)
-            for k, v in INTENTS.items()
-        }
-
-    return INTENT_EMB
-
 # =========================
 # MAIN ENGINE
 # =========================
 
 def analyze_text(text: str):
+    
+    global INTENT_EMB
+    
     model = get_model()
     text = text or ""
 
@@ -253,57 +153,15 @@ def analyze_text(text: str):
     # ML SCORE
     # =========================
 
-    emb = get_embeddings(model)
+    emb = get_embeddings(model, INTENT_EMB)
 
-    ml_score = 0
-    benign_score = 0
+    semantic_hits, ml_score, benign_score, similarity_debug = analyze_semantics(
+        text=text,
+        embedding=embedding,
+        embeddings=emb
+    )
 
-    for intent, proto in emb.items():
-        sim = util.cos_sim(embedding, proto).item()
-        sim = max(0, sim)
-        
-        print(intent, round(sim, 3))
-
-        thresholds = {
-            "impersonation": 0.40,
-            "credentials": 0.30,
-            "threats": 0.35,
-            "urgency": 0.45,
-            "reward": 0.50,
-            "suspicious_link": 0.30,
-            "benign_security": 0.45
-        }
-
-        if sim > thresholds[intent]:
-            semantic_hits.append(SIGNAL_MAP[intent])
-            
-        # HARD RULES (SOC OVERRIDE)
-    text_lower = text.lower()
-
-    if intent == "urgency":
-        if any(x in text_lower for x in [
-            "verifique inmediatamente",
-            "acción inmediata",
-            "último aviso",
-            "actúe ahora",
-            "urgente"
-        ]):
-            semantic_hits.append("urgency")
-
-    if intent == "credentials":
-        if any(x in text_lower for x in [
-            "verifique su cuenta",
-            "confirmar identidad",
-            "introduzca su contraseña",
-            "paypal",
-            "login"
-        ]):
-            semantic_hits.append("credentials")
-
-        if intent == "benign_security":
-            benign_score += abs(WEIGHTS[intent]) * sim
-        else:
-            ml_score += WEIGHTS[intent] * sim
+    INTENT_EMB = emb
 
     ml_norm = ml_score / MAX_ML_SCORE
     ml_norm = ml_norm - (benign_score / MAX_ML_SCORE)
@@ -338,8 +196,8 @@ def analyze_text(text: str):
     rules_triggered
 )
     # =========================
-# ATTACK PATTERN SCORE
-# =========================
+    # ATTACK PATTERN SCORE
+    # =========================
 
     attack_chain_score = 0.10 if (identity_hits >= 1 and behavior_hits >= 2) else 0.0
 
@@ -377,8 +235,8 @@ def analyze_text(text: str):
     ml_norm * 0.15
 )
     # =========================
-# SOC CRITICAL OVERRIDE LAYER
-# =========================
+    # SOC CRITICAL OVERRIDE LAYER
+    # =========================
 
     if "brand_impersonation" in all_signals:
         raw_risk += 0.10
@@ -395,7 +253,7 @@ def analyze_text(text: str):
     # CAP FINAL
     raw_risk = min(1.0, raw_risk)
 
-# OVERRIDE SOC REAL
+    # OVERRIDE SOC REAL
     if dns_fail:
         raw_risk = max(raw_risk, 0.65)
 
